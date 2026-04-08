@@ -121,4 +121,5 @@ Current proof coverage includes:
 - This is a Windows-native tiny supervisor, not a full service manager.
 - It is intentionally focused on one-child lifecycle control.
 - The nginx proof path uses a PowerShell job launch because `Start-Process` can lose the `--` separator and misroute child flags like `-p` into `tini-win` parsing.
+- License: Apache 2.0 (`LICENSE`).
 - See `docs/SPEC.md`, `docs/EDGE-CASES-AND-TESTING.md`, and `samples/README.md` for scope and validation details.
