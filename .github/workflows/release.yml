@@ -1,15 +1,15 @@
 name: release
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       version:
-        description: Release version label (for example v0.1.0)
-        required: true
-        default: v0.1.0
-  push:
-    tags:
-      - 'v*'
+        description: Optional release version override (for example 2026.4.9.12)
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -33,15 +35,20 @@ jobs:
         shell: pwsh
         run: .\scripts\test.ps1
 
-      - name: Resolve version
+      - name: Resolve version and tag
         id: version
         shell: pwsh
         run: |
-          $version = '${{ github.event.inputs.version }}'
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            $version = '${{ github.ref_name }}'
+          $override = '${{ github.event.inputs.version }}'
+          if (-not [string]::IsNullOrWhiteSpace($override)) {
+            $version = $override.Trim()
+          } else {
+            $dateVersion = (Get-Date).ToUniversalTime().ToString('yyyy.M.d')
+            $version = "$dateVersion.${{ github.run_number }}"
           }
+          $tag = "v$version"
           "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Package release
         shell: pwsh
@@ -55,11 +62,21 @@ jobs:
             dist\*.zip
             dist\*.sha256
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Create Git tag
+        shell: pwsh
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -f '${{ steps.version.outputs.tag }}' '${{ github.sha }}'
+          git push origin 'refs/tags/${{ steps.version.outputs.tag }}' --force
+
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           files: |
             dist\*.zip
             dist\*.sha256
           generate_release_notes: true
+          make_latest: true

@@ -122,12 +122,32 @@ GitHub Actions workflow:
 - `.github/workflows/release.yml`
 
 Current release behavior:
+- runs on every push to `master`
+- also supports manual `workflow_dispatch` with an optional version override
 - runs tests on `windows-latest`
 - builds a Windows release binary
 - packages `tini-win.exe` + `README.md` + `LICENSE` into a zip
 - writes a `.sha256` checksum file
 - uploads artifacts on workflow runs
-- publishes assets to GitHub Releases on pushed `v*` tags
+- creates/updates a GitHub Release automatically for each `master` build
+
+## Versioning
+
+Default release versioning is date-based:
+- `yyyy.m.d.<run_number>`
+
+Example:
+- `2026.4.9.17`
+
+Why not plain `yyyy.m.d` only?
+- because multiple `master` builds can happen on the same day
+- Git tags/releases must be unique
+- the extra run number keeps the date readable while avoiding collisions
+
+The release tag format is:
+- `vyyyy.m.d.<run_number>`
+
+You can still manually override the version in `workflow_dispatch` if needed.
 
 ## Example
 
