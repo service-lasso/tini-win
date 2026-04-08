@@ -200,26 +200,30 @@ function Invoke-BreakawayCharacterization {
 }
 
 function Invoke-RelaunchOrphanProof {
-  param([string]$AppExe, [string]$TempDir)
-  $parentPidFile = Join-Path $TempDir 'relaunch-parent.pid'
-  $childPidFile = Join-Path $TempDir 'relaunch-child.pid'
-  & $tiniWinExe -- (Resolve-Path $AppExe).Path --duration 30 --pid-file $parentPidFile --child-pid-file $childPidFile
-  if ($LASTEXITCODE -ne 0) { throw "relaunch-orphan wrapper exited with code $LASTEXITCODE" }
+  param([string]$Label, [string]$AppCommand, [string]$TempDir, [string]$RunArgs = '')
+  $safeLabel = $Label -replace '[^A-Za-z0-9]+', '-'
+  $parentPidFile = Join-Path $TempDir ($safeLabel + '-parent.pid')
+  $childPidFile = Join-Path $TempDir ($safeLabel + '-child.pid')
+  $argsLine = '-- ' + $AppCommand + ' ' + $RunArgs + ' --duration 30 --pid-file "' + $parentPidFile + '" --child-pid-file "' + $childPidFile + '"'
+  $proc = Start-TiniWrapped -ArgsLine $argsLine.Trim()
+  Wait-Process -Id $proc.Id
+  if ($proc.ExitCode -ne 0) { throw "$Label wrapper exited with code $($proc.ExitCode)" }
   $childPid = Read-PidFile $childPidFile
   Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
-  Write-Host "relaunch-orphan child pid=$childPid cleaned up after parent exit"
+  Write-Host "$Label child pid=$childPid cleaned up after parent exit"
 }
 
 function Invoke-BrokeredChildCharacterization {
-  param([string]$AppExe, [string]$TempDir)
-  $requestFile = Join-Path $TempDir 'broker.request'
-  $stopFile = Join-Path $TempDir 'broker.stop'
-  $brokerPIDFile = Join-Path $TempDir 'broker.pid'
-  $brokerChildPIDFile = Join-Path $TempDir 'broker.child.pid'
-  $clientPIDFile = Join-Path $TempDir 'broker.client.pid'
-  $broker = Start-Process -FilePath $AppExe -ArgumentList @('--mode','broker','--request-file',$requestFile,'--stop-file',$stopFile,'--pid-file',$brokerPIDFile,'--child-pid-file',$brokerChildPIDFile,'--duration','30') -PassThru
+  param([string]$Label, [string]$AppPath, [string]$TempDir)
+  $safeLabel = $Label -replace '[^A-Za-z0-9]+', '-'
+  $requestFile = Join-Path $TempDir ($safeLabel + '.request')
+  $stopFile = Join-Path $TempDir ($safeLabel + '.stop')
+  $brokerPIDFile = Join-Path $TempDir ($safeLabel + '.broker.pid')
+  $brokerChildPIDFile = Join-Path $TempDir ($safeLabel + '.broker.child.pid')
+  $clientPIDFile = Join-Path $TempDir ($safeLabel + '.client.pid')
+  $broker = Start-Process -FilePath $AppPath -ArgumentList @('--mode','broker','--request-file',$requestFile,'--stop-file',$stopFile,'--pid-file',$brokerPIDFile,'--child-pid-file',$brokerChildPIDFile,'--duration','30') -PassThru
   Wait-ForFile -Path $brokerPIDFile
-  $clientProc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppExe) + ' --mode client --request-file "' + $requestFile + '" --pid-file "' + $clientPIDFile + '"')
+  $clientProc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppPath) + ' --mode client --request-file "' + $requestFile + '" --pid-file "' + $clientPIDFile + '"')
   Wait-ForFile -Path $clientPIDFile
   Wait-ForFile -Path $brokerChildPIDFile -TimeoutSeconds 8
   $childPid = Read-PidFile $brokerChildPIDFile
@@ -227,11 +231,39 @@ function Invoke-BrokeredChildCharacterization {
   Wait-Process -Id $clientProc.Id -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 1
   if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
-    Write-Host "brokered-child broker-spawned pid=$childPid survived wrapped client stop (gap exposed)"
+    Write-Host "$Label broker-spawned pid=$childPid survived wrapped client stop (gap exposed)"
     taskkill /PID $childPid /T /F | Out-Null
     Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
   } else {
-    Write-Host "brokered-child broker-spawned pid=$childPid did not survive this run"
+    Write-Host "$Label broker-spawned pid=$childPid did not survive this run"
+  }
+  Set-Content -Path $stopFile -Value stop -NoNewline
+  Stop-Process -Id $broker.Id -ErrorAction SilentlyContinue
+}
+
+function Invoke-JavaBrokeredChildCharacterization {
+  param([string]$Label, [string]$AppPath, [string]$TempDir)
+  $safeLabel = $Label -replace '[^A-Za-z0-9]+', '-'
+  $requestFile = Join-Path $TempDir ($safeLabel + '.request')
+  $stopFile = Join-Path $TempDir ($safeLabel + '.stop')
+  $brokerPIDFile = Join-Path $TempDir ($safeLabel + '.broker.pid')
+  $brokerChildPIDFile = Join-Path $TempDir ($safeLabel + '.broker.child.pid')
+  $clientPIDFile = Join-Path $TempDir ($safeLabel + '.client.pid')
+  $broker = Start-Process -FilePath $AppPath -ArgumentList @('--mode','broker','--request-file',$requestFile,'--stop-file',$stopFile,'--pid-file',$brokerPIDFile,'--child-pid-file',$brokerChildPIDFile,'--duration','30') -PassThru
+  Wait-ForFile -Path $brokerPIDFile
+  $clientProc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppPath) + ' --mode client --request-file "' + $requestFile + '" --pid-file "' + $clientPIDFile + '"')
+  Wait-ForFile -Path $clientPIDFile
+  Wait-ForFile -Path $brokerChildPIDFile -TimeoutSeconds 8
+  $childPid = Read-PidFile $brokerChildPIDFile
+  Stop-Process -Id $clientProc.Id
+  Wait-Process -Id $clientProc.Id -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 1
+  if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+    Write-Host "$Label broker-spawned pid=$childPid survived wrapped client stop (gap exposed)"
+    taskkill /PID $childPid /T /F | Out-Null
+    Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
+  } else {
+    Write-Host "$Label broker-spawned pid=$childPid did not survive this run"
   }
   Set-Content -Path $stopFile -Value stop -NoNewline
   Stop-Process -Id $broker.Id -ErrorAction SilentlyContinue
@@ -333,47 +365,79 @@ $javaIgnorePidFile = Join-Path $tempDir 'java-sample-ignore.pid'
 Invoke-IgnoreStopProof -Label 'java sample ignore-stop' -AppCommand (Quote-CommandPath $javaSampleCmd) -PidFile $javaIgnorePidFile -RunArgs '--mode ignore-stop'
 
 Write-Host ""
-Write-Host "== Case 9: integration tests =="
+Write-Host "== Case 9: Java sample ProcessBuilder shell launch =="
+$javaShellParentPidFile = Join-Path $tempDir 'java-shell-parent.pid'
+$javaShellChildPidFile = Join-Path $tempDir 'java-shell-child.pid'
+Invoke-SpawnCleanupProof -Label 'java sample ProcessBuilder shell' -AppCommand (Quote-CommandPath $javaSampleCmd) -ParentPidFile $javaShellParentPidFile -ChildPidFile $javaShellChildPidFile -RunArgs '--mode spawn-child-shell'
+
+Write-Host ""
+Write-Host "== Case 10: Java sample Runtime.exec array launch =="
+$javaRuntimeArrayParentPidFile = Join-Path $tempDir 'java-runtime-array-parent.pid'
+$javaRuntimeArrayChildPidFile = Join-Path $tempDir 'java-runtime-array-child.pid'
+Invoke-SpawnCleanupProof -Label 'java sample Runtime.exec array' -AppCommand (Quote-CommandPath $javaSampleCmd) -ParentPidFile $javaRuntimeArrayParentPidFile -ChildPidFile $javaRuntimeArrayChildPidFile -RunArgs '--mode runtime-exec-array'
+
+Write-Host ""
+Write-Host "== Case 11: Java sample Runtime.exec string launch =="
+$javaRuntimeStringParentPidFile = Join-Path $tempDir 'java-runtime-string-parent.pid'
+$javaRuntimeStringChildPidFile = Join-Path $tempDir 'java-runtime-string-child.pid'
+Invoke-SpawnCleanupProof -Label 'java sample Runtime.exec string' -AppCommand (Quote-CommandPath $javaSampleCmd) -ParentPidFile $javaRuntimeStringParentPidFile -ChildPidFile $javaRuntimeStringChildPidFile -RunArgs '--mode runtime-exec-string'
+
+Write-Host ""
+Write-Host "== Case 12: Java sample batch-wrapper launch =="
+$javaBatchParentPidFile = Join-Path $tempDir 'java-batch-parent.pid'
+$javaBatchChildPidFile = Join-Path $tempDir 'java-batch-child.pid'
+Invoke-SpawnCleanupProof -Label 'java sample batch-wrapper' -AppCommand (Quote-CommandPath $javaSampleCmd) -ParentPidFile $javaBatchParentPidFile -ChildPidFile $javaBatchChildPidFile -RunArgs '--mode batch-wrapper-child'
+
+Write-Host ""
+Write-Host "== Case 13: Java sample relaunch-orphan cleanup =="
+Invoke-RelaunchOrphanProof -Label 'java sample relaunch-orphan' -AppCommand (Quote-CommandPath $javaSampleCmd) -TempDir $tempDir -RunArgs '--mode relaunch-orphan'
+
+Write-Host ""
+Write-Host "== Case 14: Java sample brokered-child characterization =="
+Invoke-JavaBrokeredChildCharacterization -Label 'java sample brokered-child' -AppPath $javaSampleCmd -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 15: integration tests =="
 go test .\internal\app .\internal\runner -v
 
 Write-Host ""
-Write-Host "== Case 10: nginx local fixture availability =="
+Write-Host "== Case 16: nginx local fixture availability =="
 if (Test-Path $localNginxExe) { Write-Host "local nginx fixture found at $localNginxExe" } else { throw 'local nginx fixture missing' }
 
 Write-Host ""
-Write-Host "== Case 11: nginx healthy scenario =="
+Write-Host "== Case 17: nginx healthy scenario =="
 $nginxHealthyDir = Join-Path $tempDir 'nginx-healthy'
 Render-NginxScenario -Scenario 'healthy' -Port 18080 -OutputDir $nginxHealthyDir
 Invoke-NginxHealthyProof -InstanceDir $nginxHealthyDir -Port 18080
 
 Write-Host ""
-Write-Host "== Case 12: nginx no-health scenario =="
+Write-Host "== Case 18: nginx no-health scenario =="
 $nginxNoHealthDir = Join-Path $tempDir 'nginx-no-health'
 Render-NginxScenario -Scenario 'no-health' -Port 18081 -OutputDir $nginxNoHealthDir
 Invoke-NginxNoHealthProof -InstanceDir $nginxNoHealthDir -Port 18081
 
 Write-Host ""
-Write-Host "== Case 13: nginx invalid-config scenario =="
+Write-Host "== Case 19: nginx invalid-config scenario =="
 $nginxInvalidDir = Join-Path $tempDir 'nginx-invalid'
 Render-NginxScenario -Scenario 'invalid-config' -Port 18082 -OutputDir $nginxInvalidDir
 Invoke-NginxInvalidConfigProof -InstanceDir $nginxInvalidDir
 
 Write-Host ""
-Write-Host "== Case 14: breakaway-child characterization =="
+Write-Host "== Case 20: breakaway-child characterization =="
 Invoke-BreakawayCharacterization -AppExe (Join-Path $testAppsDir 'breakaway-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 15: relaunch-orphan cleanup =="
-Invoke-RelaunchOrphanProof -AppExe (Join-Path $testAppsDir 'relaunch-orphan.exe') -TempDir $tempDir
+Write-Host "== Case 21: relaunch-orphan cleanup =="
+Invoke-RelaunchOrphanProof -Label 'relaunch-orphan' -AppCommand (Quote-CommandPath (Join-Path $testAppsDir 'relaunch-orphan.exe')) -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 16: brokered-child characterization =="
-Invoke-BrokeredChildCharacterization -AppExe (Join-Path $testAppsDir 'brokered-child.exe') -TempDir $tempDir
+Write-Host "== Case 22: brokered-child characterization =="
+Invoke-BrokeredChildCharacterization -Label 'brokered-child' -AppPath (Join-Path $testAppsDir 'brokered-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 17: graceful-stop quoting tests =="
+Write-Host "== Case 23: graceful-stop quoting tests =="
 go test .\internal\runner -run TestSplitCommandLine -v
 
 Write-Host ""
-Write-Host "== Case 18: restart / port-rebind server =="
+Write-Host "== Case 24: restart / port-rebind server =="
 go test .\internal\runner -run TestRunContext_PortRebindServerRestartsCleanly -v

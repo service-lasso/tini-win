@@ -31,4 +31,14 @@ exit /b %ERRORLEVEL%
 "@
 Set-Content -Path .\bin\samples\java\edgecase-app.cmd -Value $cmd -NoNewline
 
+$childWrapper = @"
+@echo off
+setlocal
+set DURATION=%~1
+if "%DURATION%"=="" set DURATION=30
+ping 127.0.0.1 -n %DURATION% >nul
+exit /b 0
+"@
+Set-Content -Path .\bin\samples\java\child-wrapper.cmd -Value $childWrapper -NoNewline
+
 Write-Host "Built sample projects under .\bin\samples"

@@ -108,7 +108,7 @@ $LASTEXITCODE
 Current proof coverage includes:
 - small lifecycle test apps
 - Go sample project cases
-- Java sample project cases
+- Java sample project cases, including Java-specific launch paths (`ProcessBuilder`, `Runtime.exec`, batch-wrapper launch, relaunch-orphan, broker/client characterization)
 - repo-local nginx scenarios
 - relaunch/orphan cleanup proof
 - brokered-child escape characterization
@@ -166,8 +166,9 @@ You can still manually override the version in `workflow_dispatch` if needed, bu
 - This is a Windows-native tiny supervisor, not a full service manager.
 - It is intentionally focused on one-child lifecycle control.
 - A `breakaway child` means a spawned process that escapes the parent Job Object and may survive cleanup that kills the normal job tree.
-- Current Java proof coverage is for normal JVM lifecycle behavior under `tini-win` (`spawn-child`, `ignore-stop`), not a proven Java-specific breakaway or brokered escape path.
+- Current Java proof coverage now includes normal JVM lifecycle plus Java-specific launch paths like `ProcessBuilder`, `Runtime.exec(String[])`, `Runtime.exec(String)`, batch-wrapper launch, relaunch-orphan, and broker/client characterization.
 - On Windows, Java does not use Unix `fork()` semantics in the usual sense. `ProcessBuilder` or `Runtime.exec(...)` normally create a child process, which should remain in the same Job Object unless launched through some external broker/escape mechanism.
+- The remaining Java-specific gap is true in-JVM breakaway creation with explicit Windows breakaway flags. That is not yet proven here.
 - The nginx proof path uses a PowerShell job launch because `Start-Process` can lose the `--` separator and misroute child flags like `-p` into `tini-win` parsing.
 - License: Apache 2.0 (`LICENSE`).
 - See `docs/SPEC.md`, `docs/EDGE-CASES-AND-TESTING.md`, and `samples/README.md` for scope and validation details.

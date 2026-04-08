@@ -109,9 +109,12 @@ Use after the Go sample passes.
 - spawned-child cleanup still works
 - forced cleanup still works on a longer-lived runtime
 - normal Java child creation paths (`ProcessBuilder`, `Runtime.exec`) behave like ordinary managed children under the job model
+- shell-indirected and batch-wrapper launch paths are still cleaned up correctly
+- relaunch-orphan behavior is understood for Java launch paths
+- broker/client launch behavior is characterized for Java as well
 
 #### Important scope note
-This is not yet a proof of Java-specific breakaway or externally brokered escape behavior. On Windows, Java is not exercising Unix-style `fork()` semantics here. The current Java sample proves normal JVM child lifecycle behavior, not every possible helper-launch mechanism.
+This now covers several Java-specific launch mechanisms, but it is still not a proof of a true in-JVM breakaway path with explicit Windows breakaway creation flags. On Windows, Java is not exercising Unix-style `fork()` semantics here. The current Java sample proves realistic JVM launch behavior and brokered-launch characterization, not every possible helper-launch mechanism.
 
 ## Real-world validation target
 
