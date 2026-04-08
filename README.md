@@ -110,6 +110,25 @@ Current proof coverage includes:
 - Java sample project cases
 - repo-local nginx scenarios
 
+## Release pipeline
+
+Local packaging:
+
+```powershell
+.\scripts\package-release.ps1 -Version v0.1.0 -Platform windows-amd64 -OutputDir .\dist
+```
+
+GitHub Actions workflow:
+- `.github/workflows/release.yml`
+
+Current release behavior:
+- runs tests on `windows-latest`
+- builds a Windows release binary
+- packages `tini-win.exe` + `README.md` + `LICENSE` into a zip
+- writes a `.sha256` checksum file
+- uploads artifacts on workflow runs
+- publishes assets to GitHub Releases on pushed `v*` tags
+
 ## Example
 
 ```powershell
