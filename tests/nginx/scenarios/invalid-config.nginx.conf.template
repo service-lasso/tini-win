@@ -1,0 +1,10 @@
+daemon off;
+worker_processes  1;
+
+this_is_not_valid_nginx_syntax on;
+
+http {
+    server {
+        listen {{PORT}};
+    }
+}

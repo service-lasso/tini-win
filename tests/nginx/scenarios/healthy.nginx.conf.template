@@ -1,0 +1,44 @@
+daemon off;
+worker_processes  1;
+
+pid "{{ROOT_DIR}}/logs/nginx.pid";
+error_log  "{{ROOT_DIR}}/logs/nginx-error.log"  info;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       "{{ROOT_DIR}}/conf/mime.types";
+    default_type  application/octet-stream;
+
+    access_log  "{{ROOT_DIR}}/logs/nginx-access.log";
+    client_body_temp_path "{{ROOT_DIR}}/temp/client_body_temp";
+    proxy_temp_path       "{{ROOT_DIR}}/temp/proxy_temp";
+    fastcgi_temp_path     "{{ROOT_DIR}}/temp/fastcgi_temp";
+    uwsgi_temp_path       "{{ROOT_DIR}}/temp/uwsgi_temp";
+    scgi_temp_path        "{{ROOT_DIR}}/temp/scgi_temp";
+
+    sendfile on;
+    keepalive_timeout 65;
+
+    server {
+        listen {{PORT}};
+        server_name 127.0.0.1 localhost;
+        index Homepage.html;
+
+        location /health {
+            access_log off;
+            default_type text/plain;
+            return 200 'ok';
+        }
+
+        location / {
+            root "{{ROOT_DIR}}/html/content/luna/pages";
+        }
+
+        location ~ ^/_errors_/(.*)$ {
+            alias "{{ROOT_DIR}}/html/_errors_/$1";
+        }
+    }
+}
