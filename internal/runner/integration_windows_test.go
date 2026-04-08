@@ -6,6 +6,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,7 +54,7 @@ func TestRunContext_GracefulStopCommand(t *testing.T) {
 	go func() {
 		errCh <- RunContext(ctx, Config{
 			Command:      []string{exe, "--signal-file", signalFile, "--pid-file", pidFile},
-			GracefulStop: "\"" + exe + "\" --send --signal-file \"" + signalFile + "\"",
+			GracefulStop: fmt.Sprintf("\"%s\" --send --signal-file \"%s\"", exe, signalFile),
 			StopTimeout:  2 * time.Second,
 			KillTree:     true,
 			Verbose:      true,
@@ -157,6 +160,187 @@ func TestRunContext_ForcedStopReturnsExitCodeErrorWithoutRemap(t *testing.T) {
 	waitForProcessState(t, pid, false, 5*time.Second)
 }
 
+func TestRunContext_RelaunchOrphanChildGetsCleanedUp(t *testing.T) {
+	exe := buildTestApp(t, "relaunch-orphan")
+	tempDir := t.TempDir()
+	parentPIDFile := filepath.Join(tempDir, "relaunch-parent.pid")
+	childPIDFile := filepath.Join(tempDir, "relaunch-child.pid")
+
+	var out, errb bytes.Buffer
+	err := RunContext(context.Background(), Config{
+		Command:       []string{exe, "--duration", "30", "--pid-file", parentPIDFile, "--child-pid-file", childPIDFile},
+		StopTimeout:   2 * time.Second,
+		KillTree:      true,
+		Verbose:       true,
+		RemapExitCode: map[int]int{},
+	}, &out, &errb)
+	if err != nil {
+		t.Fatalf("expected parent to exit cleanly, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+	}
+
+	childPID := waitForPIDFile(t, childPIDFile, 5*time.Second)
+	waitForProcessState(t, childPID, false, 5*time.Second)
+}
+
+func TestRunContext_BrokeredChildCanEscapeTree(t *testing.T) {
+	brokerExe := buildTestApp(t, "brokered-child")
+	clientExe := brokerExe
+	tempDir := t.TempDir()
+	requestFile := filepath.Join(tempDir, "broker.request")
+	stopFile := filepath.Join(tempDir, "broker.stop")
+	brokerPIDFile := filepath.Join(tempDir, "broker.pid")
+	brokerChildPIDFile := filepath.Join(tempDir, "broker.child.pid")
+	clientPIDFile := filepath.Join(tempDir, "client.pid")
+
+	brokerCmd := exec.Command(brokerExe, "--mode", "broker", "--request-file", requestFile, "--stop-file", stopFile, "--pid-file", brokerPIDFile, "--child-pid-file", brokerChildPIDFile, "--duration", "30")
+	var brokerOut, brokerErr bytes.Buffer
+	brokerCmd.Stdout = &brokerOut
+	brokerCmd.Stderr = &brokerErr
+	if err := brokerCmd.Start(); err != nil {
+		t.Fatalf("start broker: %v", err)
+	}
+	defer func() {
+		_ = os.WriteFile(stopFile, []byte("stop"), 0o644)
+		_ = brokerCmd.Process.Kill()
+		_, _ = brokerCmd.Process.Wait()
+	}()
+	waitForPIDFile(t, brokerPIDFile, 5*time.Second)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, errb bytes.Buffer
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunContext(ctx, Config{
+			Command:       []string{clientExe, "--mode", "client", "--request-file", requestFile, "--pid-file", clientPIDFile},
+			StopTimeout:   500 * time.Millisecond,
+			KillTree:      true,
+			Verbose:       true,
+			RemapExitCode: map[int]int{137: 0},
+		}, &out, &errb)
+	}()
+
+	clientPID := waitForPIDFile(t, clientPIDFile, 5*time.Second)
+	waitForProcessState(t, clientPID, true, 3*time.Second)
+	childPID := waitForPIDFile(t, brokerChildPIDFile, 8*time.Second)
+	waitForProcessState(t, childPID, true, 3*time.Second)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("expected wrapped client shutdown to succeed, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatalf("timeout waiting for brokered child client shutdown\nstdout:\n%s\nstderr:\n%s", out.String(), errb.String())
+	}
+
+	waitForProcessState(t, clientPID, false, 5*time.Second)
+	if !processExists(childPID) {
+		t.Fatalf("expected broker-spawned child pid %d to survive wrapped client stop as a gap characterization\nstdout:\n%s\nstderr:\n%s\nbroker stdout:\n%s\nbroker stderr:\n%s", childPID, out.String(), errb.String(), brokerOut.String(), brokerErr.String())
+	}
+
+	_ = os.WriteFile(stopFile, []byte("stop"), 0o644)
+	_ = exec.Command("taskkill", "/PID", strconv.Itoa(childPID), "/T", "/F").Run()
+	waitForProcessState(t, childPID, false, 5*time.Second)
+}
+
+func TestRunContext_BreakawayChildCharacterization(t *testing.T) {
+	exe := buildTestApp(t, "breakaway-child")
+	tempDir := t.TempDir()
+	parentPIDFile := filepath.Join(tempDir, "breakaway-parent.pid")
+	childPIDFile := filepath.Join(tempDir, "breakaway-child.pid")
+	statusFile := filepath.Join(tempDir, "breakaway.status")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, errb bytes.Buffer
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunContext(ctx, Config{
+			Command:       []string{exe, "--duration", "30", "--pid-file", parentPIDFile, "--child-pid-file", childPIDFile, "--status-file", statusFile},
+			StopTimeout:   500 * time.Millisecond,
+			KillTree:      true,
+			Verbose:       true,
+			RemapExitCode: map[int]int{137: 0},
+		}, &out, &errb)
+	}()
+
+	waitForPIDFile(t, parentPIDFile, 5*time.Second)
+	waitForFileExists(t, statusFile, 5*time.Second)
+	statusBytes, _ := os.ReadFile(statusFile)
+	status := strings.TrimSpace(string(statusBytes))
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("expected breakaway characterization wrapper shutdown to succeed, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatalf("timeout waiting for breakaway characterization\nstdout:\n%s\nstderr:\n%s", out.String(), errb.String())
+	}
+
+	if strings.HasPrefix(status, "spawn-error:") {
+		return
+	}
+	childPID := waitForPIDFile(t, childPIDFile, 5*time.Second)
+	waitForProcessState(t, childPID, false, 5*time.Second)
+}
+
+func TestRunContext_PortRebindServerRestartsCleanly(t *testing.T) {
+	exe := buildTestApp(t, "port-rebind-server")
+	tempDir := t.TempDir()
+	signalFile := filepath.Join(tempDir, "server.signal")
+	pidFile := filepath.Join(tempDir, "server.pid")
+	port := 18190
+	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, errb bytes.Buffer
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunContext(ctx, Config{
+			Command:      []string{exe, "--port", strconv.Itoa(port), "--signal-file", signalFile, "--pid-file", pidFile},
+			GracefulStop: fmt.Sprintf("\"%s\" --send --signal-file \"%s\"", exe, signalFile),
+			StopTimeout:  3 * time.Second,
+			KillTree:     true,
+			Verbose:      true,
+		}, &out, &errb)
+	}()
+
+	pid := waitForPIDFile(t, pidFile, 5*time.Second)
+	waitForProcessState(t, pid, true, 3*time.Second)
+	waitForHTTPStatus(t, url, 200, 8*time.Second)
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("expected graceful server shutdown success, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timeout waiting for graceful server shutdown\nstdout:\n%s\nstderr:\n%s", out.String(), errb.String())
+	}
+	waitForProcessState(t, pid, false, 5*time.Second)
+
+	var out2, errb2 bytes.Buffer
+	err := RunContext(context.Background(), Config{
+		Command:     []string{exe, "--port", strconv.Itoa(port), "--signal-file", filepath.Join(tempDir, "server2.signal"), "--pid-file", filepath.Join(tempDir, "server2.pid"), "--send"},
+		StopTimeout: 2 * time.Second,
+		KillTree:    true,
+		Verbose:     true,
+	}, &out2, &errb2)
+	var ee *ExitCodeError
+	if err != nil && !errors.As(err, &ee) {
+		t.Fatalf("unexpected restart probe error: %v\nstdout:\n%s\nstderr:\n%s", err, out2.String(), errb2.String())
+	}
+	listener, listenErr := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if listenErr != nil {
+		t.Fatalf("expected port %d to be reusable after shutdown, listen failed: %v", port, listenErr)
+	}
+	_ = listener.Close()
+}
+
 func buildTestApp(t *testing.T, name string) string {
 	t.Helper()
 	root := findRepoRoot(t)
@@ -199,6 +383,18 @@ func waitForPIDFile(t *testing.T, path string, timeout time.Duration) int {
 	return 0
 }
 
+func waitForFileExists(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for file %s", path)
+}
+
 func waitForProcessState(t *testing.T, pid int, wantExists bool, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -220,4 +416,20 @@ func processExists(pid int) bool {
 		return false
 	}
 	return strings.Contains(out.String(), strconv.Itoa(pid))
+}
+
+func waitForHTTPStatus(t *testing.T, url string, want int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == want {
+				return
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for http %d from %s", want, url)
 }

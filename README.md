@@ -27,6 +27,7 @@ Implemented now:
 - purpose-built Go test apps for lifecycle edge cases
 - repo-local Go and Java sample projects for more app-like lifecycle proof
 - repo-local nginx fixture + scenario configs (`healthy`, `no-health`, `invalid-config`)
+- characterization coverage for relaunch/orphan, brokered-child escape, breakaway attempt behavior, and restart/port-rebind reuse
 
 ## Project layout
 
@@ -109,13 +110,17 @@ Current proof coverage includes:
 - Go sample project cases
 - Java sample project cases
 - repo-local nginx scenarios
+- relaunch/orphan cleanup proof
+- brokered-child escape characterization
+- breakaway-child characterization attempt
+- restart/port-rebind integration proof
 
 ## Release pipeline
 
 Local packaging:
 
 ```powershell
-.\scripts\package-release.ps1 -Version v0.1.0 -Platform windows-amd64 -OutputDir .\dist
+.\scripts\package-release.ps1 -Version 2026.4.9-86a7a68 -Platform windows-amd64 -OutputDir .\dist
 ```
 
 GitHub Actions workflow:
@@ -133,21 +138,22 @@ Current release behavior:
 
 ## Versioning
 
-Default release versioning is date-based:
-- `yyyy.m.d.<run_number>`
+Canonical release versioning is:
+- `yyyy.m.d-<shortsha>`
 
 Example:
-- `2026.4.9.17`
+- `2026.4.9-86a7a68`
 
-Why not plain `yyyy.m.d` only?
-- because multiple `master` builds can happen on the same day
-- Git tags/releases must be unique
-- the extra run number keeps the date readable while avoiding collisions
+Why this shape:
+- readable date-based version
+- unique on every build
+- commit is always embedded for traceability
+- consistent across release labels, artifacts, and tags
 
 The release tag format is:
-- `vyyyy.m.d.<run_number>`
+- `vyyyy.m.d-<shortsha>`
 
-You can still manually override the version in `workflow_dispatch` if needed.
+You can still manually override the version in `workflow_dispatch` if needed, but the intended override shape is the same canonical format: `yyyy.m.d-<shortsha>`.
 
 ## Example
 
@@ -159,6 +165,9 @@ You can still manually override the version in `workflow_dispatch` if needed.
 
 - This is a Windows-native tiny supervisor, not a full service manager.
 - It is intentionally focused on one-child lifecycle control.
+- A `breakaway child` means a spawned process that escapes the parent Job Object and may survive cleanup that kills the normal job tree.
+- Current Java proof coverage is for normal JVM lifecycle behavior under `tini-win` (`spawn-child`, `ignore-stop`), not a proven Java-specific breakaway or brokered escape path.
+- On Windows, Java does not use Unix `fork()` semantics in the usual sense. `ProcessBuilder` or `Runtime.exec(...)` normally create a child process, which should remain in the same Job Object unless launched through some external broker/escape mechanism.
 - The nginx proof path uses a PowerShell job launch because `Start-Process` can lose the `--` separator and misroute child flags like `-p` into `tini-win` parsing.
 - License: Apache 2.0 (`LICENSE`).
 - See `docs/SPEC.md`, `docs/EDGE-CASES-AND-TESTING.md`, and `samples/README.md` for scope and validation details.

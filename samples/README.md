@@ -43,4 +43,12 @@ Shared flags:
 - Java sample: spawn-child cleanup
 - Java sample: ignore-stop cleanup
 
+## Java scope note
+The Java sample currently proves ordinary JVM child lifecycle behavior under `tini-win`, not a Java-specific escape path.
+
+That means:
+- covered: normal Java launch, child spawn, and cleanup behavior
+- not yet covered: Java launching work through an external broker, service, scheduler, or other path that escapes the wrapped job tree
+- not the same as Unix `fork()`: on Windows, Java child creation here is effectively a normal process launch path, not classic fork semantics
+
 The sample apps exist to simulate app-level lifecycle behavior while still being deterministic enough for local proof runs.

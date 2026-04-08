@@ -60,6 +60,38 @@ Simulate a process that supports a proper explicit graceful shutdown command.
 
 ---
 
+### 5. `testapps/relaunch-orphan`
+#### Purpose
+Simulate a parent that quickly spawns a replacement child and exits.
+
+#### What to test
+- replacement/orphan child does not remain behind after the wrapped parent exits
+- the cleanup model still holds when the original parent lifecycle is intentionally short
+
+---
+
+### 6. `testapps/brokered-child`
+#### Purpose
+Simulate work being spawned by an already-running external broker instead of directly by the wrapped process.
+
+#### What to test
+- whether broker-spawned work is outside the wrapped job tree
+- whether that work can survive wrapped-client shutdown
+- whether the gap is clearly characterized and documented
+
+---
+
+### 7. `testapps/breakaway-child`
+#### Purpose
+Attempt to simulate a child intentionally escaping the parent Job Object.
+
+#### What to test
+- whether breakaway creation succeeds in the current Windows/job configuration
+- whether an escaped child survives normal wrapper cleanup
+- if breakaway creation is blocked, document that as an environment-specific characterization result rather than a false proof of containment
+
+---
+
 ## App-like validation targets
 
 ### Go sample project
@@ -76,6 +108,10 @@ Use after the Go sample passes.
 - JVM-based process start/stop behaves correctly under `tini-win`
 - spawned-child cleanup still works
 - forced cleanup still works on a longer-lived runtime
+- normal Java child creation paths (`ProcessBuilder`, `Runtime.exec`) behave like ordinary managed children under the job model
+
+#### Important scope note
+This is not yet a proof of Java-specific breakaway or externally brokered escape behavior. On Windows, Java is not exercising Unix-style `fork()` semantics here. The current Java sample proves normal JVM child lifecycle behavior, not every possible helper-launch mechanism.
 
 ## Real-world validation target
 
@@ -111,7 +147,12 @@ Use after the smaller proof targets pass.
 - determine what happens if `tini-win` itself is terminated unexpectedly
 - verify child-tree outcome is understood and documented
 
-### E. Output behavior
+### E. Escape-path characterization
+- relaunch/orphan behavior is understood
+- brokered-child escape paths are characterized
+- breakaway-child behavior is characterized, including environment-dependent failure to create a breakaway child
+
+### F. Output behavior
 - stdout/stderr remain usable
 - `tini-win` reports enough lifecycle info without becoming noisy
 
@@ -130,6 +171,13 @@ Use repo-local nginx scenarios on Windows.
 - `invalid-config`
 
 ### Phase 4
+Use characterization fixtures for escape and restart behavior.
+- `relaunch-orphan`
+- `brokered-child`
+- `breakaway-child`
+- restart/port-rebind server test
+
+### Phase 5
 Optionally test one heavier real JVM-based service with more complex descendant behavior.
 
 ## Acceptance baseline
@@ -139,3 +187,4 @@ Optionally test one heavier real JVM-based service with more complex descendant 
 - pass the repo-local Go and Java sample project proofs
 - manage graceful stop and forced cleanup correctly
 - prove nginx lifecycle control on Windows, including scenario-driven config variation, well enough for real use
+- clearly document the remaining limits around brokered work, breakaway attempts, and other escape paths that are outside ordinary job-tree containment

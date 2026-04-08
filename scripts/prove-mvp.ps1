@@ -8,10 +8,7 @@ $javaSampleCmd = Join-Path $repoRoot 'bin\samples\java\edgecase-app.cmd'
 $localNginxExe = Join-Path $repoRoot 'tests\nginx\win32\nginx.exe'
 
 function Wait-ForFile {
-  param(
-    [Parameter(Mandatory = $true)][string]$Path,
-    [int]$TimeoutSeconds = 10
-  )
+  param([Parameter(Mandatory = $true)][string]$Path, [int]$TimeoutSeconds = 10)
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   while ((Get-Date) -lt $deadline) {
     if (Test-Path $Path) { return }
@@ -21,10 +18,7 @@ function Wait-ForFile {
 }
 
 function Wait-ForProcessGone {
-  param(
-    [Parameter(Mandatory = $true)][int]$TargetPid,
-    [int]$TimeoutSeconds = 10
-  )
+  param([Parameter(Mandatory = $true)][int]$TargetPid, [int]$TimeoutSeconds = 10)
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   while ((Get-Date) -lt $deadline) {
     if (-not (Get-Process -Id $TargetPid -ErrorAction SilentlyContinue)) { return }
@@ -39,10 +33,7 @@ function Read-PidFile {
 }
 
 function Assert-ProcessExists {
-  param(
-    [Parameter(Mandatory = $true)][int]$TargetPid,
-    [Parameter(Mandatory = $true)][string]$Message
-  )
+  param([Parameter(Mandatory = $true)][int]$TargetPid, [Parameter(Mandatory = $true)][string]$Message)
   if (-not (Get-Process -Id $TargetPid -ErrorAction SilentlyContinue)) {
     throw $Message
   }
@@ -59,18 +50,12 @@ function Start-TiniWrapped {
 }
 
 function Wait-ForHttpStatus {
-  param(
-    [Parameter(Mandatory = $true)][string]$Url,
-    [Parameter(Mandatory = $true)][int]$ExpectedStatus,
-    [int]$TimeoutSeconds = 15
-  )
+  param([Parameter(Mandatory = $true)][string]$Url, [Parameter(Mandatory = $true)][int]$ExpectedStatus, [int]$TimeoutSeconds = 15)
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   while ((Get-Date) -lt $deadline) {
     try {
       $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 2
-      if ([int]$response.StatusCode -eq $ExpectedStatus) {
-        return $response
-      }
+      if ([int]$response.StatusCode -eq $ExpectedStatus) { return $response }
     } catch {
       if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq $ExpectedStatus) {
         return $_.Exception.Response
@@ -82,24 +67,12 @@ function Wait-ForHttpStatus {
 }
 
 function Render-NginxScenario {
-  param(
-    [Parameter(Mandatory = $true)][string]$Scenario,
-    [Parameter(Mandatory = $true)][int]$Port,
-    [Parameter(Mandatory = $true)][string]$OutputDir
-  )
+  param([string]$Scenario, [int]$Port, [string]$OutputDir)
   pwsh -NoLogo -NoProfile -File .\scripts\render-nginx-test-config.ps1 -Scenario $Scenario -Port $Port -OutputDir $OutputDir | Out-Null
 }
 
 function Invoke-GracefulProof {
-  param(
-    [Parameter(Mandatory = $true)][string]$Label,
-    [Parameter(Mandatory = $true)][string]$AppCommand,
-    [Parameter(Mandatory = $true)][string]$SignalCommand,
-    [Parameter(Mandatory = $true)][string]$PidFile,
-    [Parameter(Mandatory = $true)][string]$SignalFile,
-    [string]$RunArgs = ''
-  )
-
+  param([string]$Label, [string]$AppCommand, [string]$SignalCommand, [string]$PidFile, [string]$SignalFile, [string]$RunArgs = '')
   $argsLine = '--stop-timeout 2s -- ' + $AppCommand + ' ' + $RunArgs + ' --signal-file "' + $SignalFile + '" --pid-file "' + $PidFile + '"'
   $proc = Start-TiniWrapped -ArgsLine $argsLine.Trim()
   Wait-ForFile -Path $PidFile
@@ -113,14 +86,7 @@ function Invoke-GracefulProof {
 }
 
 function Invoke-SpawnCleanupProof {
-  param(
-    [Parameter(Mandatory = $true)][string]$Label,
-    [Parameter(Mandatory = $true)][string]$AppCommand,
-    [Parameter(Mandatory = $true)][string]$ParentPidFile,
-    [Parameter(Mandatory = $true)][string]$ChildPidFile,
-    [string]$RunArgs = ''
-  )
-
+  param([string]$Label, [string]$AppCommand, [string]$ParentPidFile, [string]$ChildPidFile, [string]$RunArgs = '')
   $argsLine = '--stop-timeout 500ms --remap-exit 137:0 -- ' + $AppCommand + ' ' + $RunArgs + ' --duration 30 --pid-file "' + $ParentPidFile + '" --child-pid-file "' + $ChildPidFile + '"'
   $proc = Start-TiniWrapped -ArgsLine $argsLine.Trim()
   Wait-ForFile -Path $ParentPidFile
@@ -136,13 +102,7 @@ function Invoke-SpawnCleanupProof {
 }
 
 function Invoke-IgnoreStopProof {
-  param(
-    [Parameter(Mandatory = $true)][string]$Label,
-    [Parameter(Mandatory = $true)][string]$AppCommand,
-    [Parameter(Mandatory = $true)][string]$PidFile,
-    [string]$RunArgs = ''
-  )
-
+  param([string]$Label, [string]$AppCommand, [string]$PidFile, [string]$RunArgs = '')
   $argsLine = '--stop-timeout 500ms -- ' + $AppCommand + ' ' + $RunArgs + ' --pid-file "' + $PidFile + '"'
   $proc = Start-TiniWrapped -ArgsLine $argsLine.Trim()
   Wait-ForFile -Path $PidFile
@@ -154,11 +114,7 @@ function Invoke-IgnoreStopProof {
 }
 
 function Start-NginxTiniJob {
-  param(
-    [Parameter(Mandatory = $true)][string]$InstanceDir,
-    [Parameter(Mandatory = $true)][string]$ConfPath
-  )
-
+  param([string]$InstanceDir, [string]$ConfPath)
   Start-Job -ScriptBlock {
     param($tiniWinExePath, $nginxExePath, $instanceDirPath, $confFilePath)
     & $tiniWinExePath --graceful-stop ('"' + $nginxExePath + '" -p "' + $instanceDirPath + '" -c "' + $confFilePath + '" -s quit') --stop-timeout 5s -- $nginxExePath -p $instanceDirPath -c $confFilePath
@@ -166,32 +122,16 @@ function Start-NginxTiniJob {
   } -ArgumentList $tiniWinExe, $localNginxExe, $InstanceDir, $ConfPath
 }
 
-function Finish-NginxTiniJob {
-  param([Parameter(Mandatory = $true)]$Job)
-  Wait-Job $Job | Out-Null
-  $output = Receive-Job $Job -Keep
-  $code = $Job.ChildJobs[0].JobStateInfo.Reason.HResult
-  Remove-Job $Job -Force
-  return $output
-}
-
 function Invoke-NginxHealthyProof {
-  param(
-    [Parameter(Mandatory = $true)][string]$InstanceDir,
-    [Parameter(Mandatory = $true)][int]$Port
-  )
+  param([string]$InstanceDir, [int]$Port)
   $pidFile = Join-Path $InstanceDir 'logs\nginx.pid'
   $conf = Join-Path $InstanceDir 'conf\nginx.conf'
-  $url = 'http://127.0.0.1:' + $Port + '/health'
-
   $job = Start-NginxTiniJob -InstanceDir $InstanceDir -ConfPath $conf
   Wait-ForFile -Path $pidFile -TimeoutSeconds 15
   $masterPid = Read-PidFile $pidFile
   Assert-ProcessExists -TargetPid $masterPid -Message "nginx healthy pid $masterPid was not observed running"
-  $response = Wait-ForHttpStatus -Url $url -ExpectedStatus 200 -TimeoutSeconds 15
-  if ([string]$response.Content -notmatch 'ok') {
-    throw 'nginx healthy /health response did not contain ok'
-  }
+  $response = Wait-ForHttpStatus -Url ("http://127.0.0.1:$Port/health") -ExpectedStatus 200 -TimeoutSeconds 15
+  if ([string]$response.Content -notmatch 'ok') { throw 'nginx healthy /health response did not contain ok' }
   & $localNginxExe -p $InstanceDir -c $conf -s quit | Out-Null
   Wait-ForProcessGone -TargetPid $masterPid -TimeoutSeconds 15
   Wait-Job $job | Out-Null
@@ -201,30 +141,20 @@ function Invoke-NginxHealthyProof {
 }
 
 function Invoke-NginxNoHealthProof {
-  param(
-    [Parameter(Mandatory = $true)][string]$InstanceDir,
-    [Parameter(Mandatory = $true)][int]$Port
-  )
+  param([string]$InstanceDir, [int]$Port)
   $pidFile = Join-Path $InstanceDir 'logs\nginx.pid'
   $conf = Join-Path $InstanceDir 'conf\nginx.conf'
-  $rootUrl = 'http://127.0.0.1:' + $Port + '/'
-  $healthUrl = 'http://127.0.0.1:' + $Port + '/health'
-
   $job = Start-NginxTiniJob -InstanceDir $InstanceDir -ConfPath $conf
   Wait-ForFile -Path $pidFile -TimeoutSeconds 15
   $masterPid = Read-PidFile $pidFile
   Assert-ProcessExists -TargetPid $masterPid -Message "nginx no-health pid $masterPid was not observed running"
-  $null = Wait-ForHttpStatus -Url $rootUrl -ExpectedStatus 200 -TimeoutSeconds 15
+  $null = Wait-ForHttpStatus -Url ("http://127.0.0.1:$Port/") -ExpectedStatus 200 -TimeoutSeconds 15
   try {
-    $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 2
-    if ([int]$healthResponse.StatusCode -eq 200) {
-      throw 'nginx no-health unexpectedly returned 200 for /health'
-    }
+    $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri ("http://127.0.0.1:$Port/health") -TimeoutSec 2
+    if ([int]$healthResponse.StatusCode -eq 200) { throw 'nginx no-health unexpectedly returned 200 for /health' }
   } catch {
     $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { -1 }
-    if ($status -ne 404) {
-      throw "nginx no-health expected 404 for /health, got $status"
-    }
+    if ($status -ne 404) { throw "nginx no-health expected 404 for /health, got $status" }
   }
   & $localNginxExe -p $InstanceDir -c $conf -s quit | Out-Null
   Wait-ForProcessGone -TargetPid $masterPid -TimeoutSeconds 15
@@ -235,17 +165,113 @@ function Invoke-NginxNoHealthProof {
 }
 
 function Invoke-NginxInvalidConfigProof {
-  param(
-    [Parameter(Mandatory = $true)][string]$InstanceDir
-  )
+  param([string]$InstanceDir)
   $conf = Join-Path $InstanceDir 'conf\nginx.conf'
-  $argsLine = '-- ' + (Quote-CommandPath $localNginxExe) + ' -p "' + $InstanceDir + '" -c "' + $conf + '"'
   & $tiniWinExe -- $localNginxExe -p $InstanceDir -c $conf
   $code = $LASTEXITCODE
-  if ($code -eq 0) {
-    throw 'nginx invalid-config unexpectedly exited 0'
-  }
+  if ($code -eq 0) { throw 'nginx invalid-config unexpectedly exited 0' }
   Write-Host "nginx invalid-config failed fast with exit code=$code"
+}
+
+function Invoke-BreakawayCharacterization {
+  param([string]$AppExe, [string]$TempDir)
+  $parentPidFile = Join-Path $TempDir 'breakaway-parent.pid'
+  $childPidFile = Join-Path $TempDir 'breakaway-child.pid'
+  $statusFile = Join-Path $TempDir 'breakaway.status'
+  $proc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppExe) + ' --duration 30 --pid-file "' + $parentPidFile + '" --child-pid-file "' + $childPidFile + '" --status-file "' + $statusFile + '"')
+  Wait-ForFile -Path $parentPidFile
+  Wait-ForFile -Path $statusFile
+  $status = (Get-Content -Raw $statusFile).Trim()
+  Stop-Process -Id $proc.Id
+  Wait-Process -Id $proc.Id -ErrorAction SilentlyContinue
+  if ($status -like 'spawn-error:*') {
+    Write-Host "breakaway-child status=$status (breakaway blocked under current job model)"
+    return
+  }
+  $childPid = Read-PidFile $childPidFile
+  Start-Sleep -Seconds 1
+  if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+    Write-Host "breakaway-child spawned pid=$childPid and survived wrapper stop (gap exposed)"
+    taskkill /PID $childPid /T /F | Out-Null
+    Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
+  } else {
+    Write-Host "breakaway-child spawned pid=$childPid but was still cleaned up under wrapper stop"
+  }
+}
+
+function Invoke-RelaunchOrphanProof {
+  param([string]$AppExe, [string]$TempDir)
+  $parentPidFile = Join-Path $TempDir 'relaunch-parent.pid'
+  $childPidFile = Join-Path $TempDir 'relaunch-child.pid'
+  & $tiniWinExe -- (Resolve-Path $AppExe).Path --duration 30 --pid-file $parentPidFile --child-pid-file $childPidFile
+  if ($LASTEXITCODE -ne 0) { throw "relaunch-orphan wrapper exited with code $LASTEXITCODE" }
+  $childPid = Read-PidFile $childPidFile
+  Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
+  Write-Host "relaunch-orphan child pid=$childPid cleaned up after parent exit"
+}
+
+function Invoke-BrokeredChildCharacterization {
+  param([string]$AppExe, [string]$TempDir)
+  $requestFile = Join-Path $TempDir 'broker.request'
+  $stopFile = Join-Path $TempDir 'broker.stop'
+  $brokerPIDFile = Join-Path $TempDir 'broker.pid'
+  $brokerChildPIDFile = Join-Path $TempDir 'broker.child.pid'
+  $clientPIDFile = Join-Path $TempDir 'broker.client.pid'
+  $broker = Start-Process -FilePath $AppExe -ArgumentList @('--mode','broker','--request-file',$requestFile,'--stop-file',$stopFile,'--pid-file',$brokerPIDFile,'--child-pid-file',$brokerChildPIDFile,'--duration','30') -PassThru
+  Wait-ForFile -Path $brokerPIDFile
+  $clientProc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppExe) + ' --mode client --request-file "' + $requestFile + '" --pid-file "' + $clientPIDFile + '"')
+  Wait-ForFile -Path $clientPIDFile
+  Wait-ForFile -Path $brokerChildPIDFile -TimeoutSeconds 8
+  $childPid = Read-PidFile $brokerChildPIDFile
+  Stop-Process -Id $clientProc.Id
+  Wait-Process -Id $clientProc.Id -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 1
+  if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+    Write-Host "brokered-child broker-spawned pid=$childPid survived wrapped client stop (gap exposed)"
+    taskkill /PID $childPid /T /F | Out-Null
+    Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
+  } else {
+    Write-Host "brokered-child broker-spawned pid=$childPid did not survive this run"
+  }
+  Set-Content -Path $stopFile -Value stop -NoNewline
+  Stop-Process -Id $broker.Id -ErrorAction SilentlyContinue
+}
+
+function Invoke-PortRebindProof {
+  param([string]$AppExe, [string]$TempDir)
+  $port = 18190
+  $signal1 = Join-Path $TempDir 'port1.signal'
+  $pid1 = Join-Path $TempDir 'port1.pid'
+  $job1 = Start-Job -ScriptBlock {
+    param($tini, $app, $signal, $pid, $p)
+    & $tini --graceful-stop ('"' + $app + '" --send --signal-file "' + $signal + '"') --stop-timeout 3s -- $app --port $p --signal-file $signal --pid-file $pid
+    exit $LASTEXITCODE
+  } -ArgumentList $tiniWinExe, $AppExe, $signal1, $pid1, "$port"
+  Wait-ForFile -Path $pid1
+  $serverPid1 = Read-PidFile $pid1
+  $null = Wait-ForHttpStatus -Url ("http://127.0.0.1:$port/health") -ExpectedStatus 200 -TimeoutSeconds 10
+  Stop-Job $job1 | Out-Null
+  Wait-ForProcessGone -TargetPid $serverPid1 -TimeoutSeconds 10
+  Wait-Job $job1 | Out-Null
+  Receive-Job $job1 -Keep | Out-Null
+  Remove-Job $job1 -Force
+
+  $signal2 = Join-Path $TempDir 'port2.signal'
+  $pid2 = Join-Path $TempDir 'port2.pid'
+  $job2 = Start-Job -ScriptBlock {
+    param($tini, $app, $signal, $pid, $p)
+    & $tini --graceful-stop ('"' + $app + '" --send --signal-file "' + $signal + '"') --stop-timeout 3s -- $app --port $p --signal-file $signal --pid-file $pid
+    exit $LASTEXITCODE
+  } -ArgumentList $tiniWinExe, $AppExe, $signal2, $pid2, "$port"
+  Wait-ForFile -Path $pid2
+  $serverPid2 = Read-PidFile $pid2
+  $null = Wait-ForHttpStatus -Url ("http://127.0.0.1:$port/health") -ExpectedStatus 200 -TimeoutSeconds 10
+  Stop-Job $job2 | Out-Null
+  Wait-ForProcessGone -TargetPid $serverPid2 -TimeoutSeconds 10
+  Wait-Job $job2 | Out-Null
+  Receive-Job $job2 -Keep | Out-Null
+  Remove-Job $job2 -Force
+  Write-Host "port-rebind-server restarted cleanly on port $port"
 }
 
 .\scripts\build.ps1
@@ -281,14 +307,12 @@ Write-Host ""
 Write-Host "== Case 4: spawn-child tree cleanup via tini-win =="
 $spawnParentPidFile = Join-Path $tempDir 'spawn-parent.pid'
 $spawnChildPidFile = Join-Path $tempDir 'spawn-child.pid'
-$spawnChildExe = Join-Path $testAppsDir 'spawn-child.exe'
-Invoke-SpawnCleanupProof -Label 'spawn-child' -AppCommand (Quote-CommandPath $spawnChildExe) -ParentPidFile $spawnParentPidFile -ChildPidFile $spawnChildPidFile
+Invoke-SpawnCleanupProof -Label 'spawn-child' -AppCommand (Quote-CommandPath (Join-Path $testAppsDir 'spawn-child.exe')) -ParentPidFile $spawnParentPidFile -ChildPidFile $spawnChildPidFile
 
 Write-Host ""
 Write-Host "== Case 5: ignore-stop forced cleanup via tini-win =="
 $ignorePidFile = Join-Path $tempDir 'ignore-stop.pid'
-$ignoreStopExe = Join-Path $testAppsDir 'ignore-stop.exe'
-Invoke-IgnoreStopProof -Label 'ignore-stop' -AppCommand (Quote-CommandPath $ignoreStopExe) -PidFile $ignorePidFile
+Invoke-IgnoreStopProof -Label 'ignore-stop' -AppCommand (Quote-CommandPath (Join-Path $testAppsDir 'ignore-stop.exe')) -PidFile $ignorePidFile
 
 Write-Host ""
 Write-Host "== Case 6: Go sample project graceful-stop =="
@@ -314,11 +338,7 @@ go test .\internal\app .\internal\runner -v
 
 Write-Host ""
 Write-Host "== Case 10: nginx local fixture availability =="
-if (Test-Path $localNginxExe) {
-  Write-Host "local nginx fixture found at $localNginxExe"
-} else {
-  throw 'local nginx fixture missing'
-}
+if (Test-Path $localNginxExe) { Write-Host "local nginx fixture found at $localNginxExe" } else { throw 'local nginx fixture missing' }
 
 Write-Host ""
 Write-Host "== Case 11: nginx healthy scenario =="
@@ -337,3 +357,23 @@ Write-Host "== Case 13: nginx invalid-config scenario =="
 $nginxInvalidDir = Join-Path $tempDir 'nginx-invalid'
 Render-NginxScenario -Scenario 'invalid-config' -Port 18082 -OutputDir $nginxInvalidDir
 Invoke-NginxInvalidConfigProof -InstanceDir $nginxInvalidDir
+
+Write-Host ""
+Write-Host "== Case 14: breakaway-child characterization =="
+Invoke-BreakawayCharacterization -AppExe (Join-Path $testAppsDir 'breakaway-child.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 15: relaunch-orphan cleanup =="
+Invoke-RelaunchOrphanProof -AppExe (Join-Path $testAppsDir 'relaunch-orphan.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 16: brokered-child characterization =="
+Invoke-BrokeredChildCharacterization -AppExe (Join-Path $testAppsDir 'brokered-child.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 17: graceful-stop quoting tests =="
+go test .\internal\runner -run TestSplitCommandLine -v
+
+Write-Host ""
+Write-Host "== Case 18: restart / port-rebind server =="
+go test .\internal\runner -run TestRunContext_PortRebindServerRestartsCleanly -v
