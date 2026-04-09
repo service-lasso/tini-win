@@ -133,6 +133,28 @@ What the current proof set shows:
 - explicit breakaway creation is now also positively proven in this environment when `tini-win` is started with `--allow-breakaway`, which enables `JOB_OBJECT_LIMIT_BREAKAWAY_OK` for characterization/testing
 - nginx master/worker processes launched under `tini-win` are now explicitly proven to die from wrapper/job teardown alone, without telling nginx to quit, in the forced-kill proof path
 
+## Compatibility with upstream `tini`
+
+`tini-win` follows the same basic wrapper shape:
+
+- `tini-win [OPTIONS] -- PROGRAM [ARGS...]`
+
+But it is not a drop-in flag-compatible clone of upstream `tini`.
+
+| Area | `tini-win` status | Compatibility note |
+| --- | --- | --- |
+| Basic `-- PROGRAM [ARGS...]` wrapper model | Supported | Same general invocation shape |
+| Launch one child and wait | Supported | Core behavior aligns conceptually |
+| Return child exit status | Supported | Includes optional exit remap support |
+| Verbose mode | Supported | `-v` exists, but output/details are `tini-win` specific |
+| Graceful stop before forced kill | Supported | Windows-oriented via `--graceful-stop` and `--stop-timeout` |
+| Managed child-tree cleanup | Supported | Implemented with Windows Job Objects, not Unix process-group semantics |
+| Argument-for-argument upstream `tini` flag compatibility | Not compatible | Current flags are `tini-win` specific |
+| Linux PID1 / init semantics | Not compatible | `tini-win` is a Windows babysitter, not a PID1 replacement |
+| Universal containment of all descendant work | Not supported | External brokers, Scheduler, WMI, breakaway, and similar escape paths are real limits |
+| Explicit breakaway proof | Supported for characterization | Only with opt-in `--allow-breakaway`, not the default safe mode |
+| Service Lasso simple-service backend role | Good fit | Same high-level contract, but platform guarantees still differ |
+
 ## Release pipeline
 
 Local packaging:
