@@ -27,7 +27,7 @@ Implemented now:
 - purpose-built Go test apps for lifecycle edge cases
 - repo-local Go and Java sample projects for more app-like lifecycle proof
 - repo-local nginx fixture + scenario configs (`healthy`, `no-health`, `invalid-config`)
-- characterization coverage for relaunch/orphan, brokered-child escape, breakaway attempt behavior, and restart/port-rebind reuse
+- characterization coverage for relaunch/orphan, brokered-child escape, breakaway attempt behavior, inherited-stdio cleanup, console control-event handling, external scheduler/WMI launch, and restart/port-rebind reuse
 
 ## Project layout
 
@@ -113,6 +113,10 @@ Current proof coverage includes:
 - relaunch/orphan cleanup proof
 - brokered-child escape characterization
 - breakaway-child characterization attempt
+- inherited-stdio cleanup proof
+- console ctrl-break graceful-stop proof
+- external scheduler launch characterization
+- external WMI launch characterization
 - restart/port-rebind integration proof
 
 ## Release pipeline
@@ -168,6 +172,8 @@ You can still manually override the version in `workflow_dispatch` if needed, bu
 - A `breakaway child` means a spawned process that escapes the parent Job Object and may survive cleanup that kills the normal job tree.
 - Current Java proof coverage now includes normal JVM lifecycle plus Java-specific launch paths like `ProcessBuilder`, `Runtime.exec(String[])`, `Runtime.exec(String)`, batch-wrapper launch, relaunch-orphan, and broker/client characterization.
 - On Windows, Java does not use Unix `fork()` semantics in the usual sense. `ProcessBuilder` or `Runtime.exec(...)` normally create a child process, which should remain in the same Job Object unless launched through some external broker/escape mechanism.
+- External launch paths like Task Scheduler and WMI are now explicitly characterized as out-of-job-process creation paths, and they do produce independently running work outside ordinary `tini-win` containment.
+- Console-control-event behavior is now characterized with a ctrl-break-aware fixture so apps that rely on control events can be tested explicitly.
 - The remaining Java-specific gap is true in-JVM breakaway creation with explicit Windows breakaway flags. That is not yet proven here.
 - The nginx proof path uses a PowerShell job launch because `Start-Process` can lose the `--` separator and misroute child flags like `-p` into `tini-win` parsing.
 - License: Apache 2.0 (`LICENSE`).

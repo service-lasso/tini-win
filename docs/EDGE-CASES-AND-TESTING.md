@@ -154,10 +154,16 @@ Use after the smaller proof targets pass.
 - relaunch/orphan behavior is understood
 - brokered-child escape paths are characterized
 - breakaway-child behavior is characterized, including environment-dependent failure to create a breakaway child
+- external scheduler/WMI launch paths are characterized as out-of-job-process creation paths
 
-### F. Output behavior
+### F. Handle / output behavior
 - stdout/stderr remain usable
+- inherited-stdio child behavior is understood
 - `tini-win` reports enough lifecycle info without becoming noisy
+
+### G. Console control behavior
+- apps that rely on console control events can be characterized explicitly
+- ctrl-break delivery behavior is understood separately from plain termination
 
 ## Test phases
 
@@ -178,6 +184,10 @@ Use characterization fixtures for escape and restart behavior.
 - `relaunch-orphan`
 - `brokered-child`
 - `breakaway-child`
+- inherited-stdio hold-open fixture
+- console ctrl-break fixture
+- Task Scheduler external launch characterization
+- WMI external launch characterization
 - restart/port-rebind server test
 
 ### Phase 5
@@ -190,4 +200,4 @@ Optionally test one heavier real JVM-based service with more complex descendant 
 - pass the repo-local Go and Java sample project proofs
 - manage graceful stop and forced cleanup correctly
 - prove nginx lifecycle control on Windows, including scenario-driven config variation, well enough for real use
-- clearly document the remaining limits around brokered work, breakaway attempts, and other escape paths that are outside ordinary job-tree containment
+- clearly document the remaining limits around brokered work, breakaway attempts, scheduler/WMI/service-style external launch paths, and other escape paths that are outside ordinary job-tree containment

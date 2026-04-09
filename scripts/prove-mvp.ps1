@@ -269,6 +269,68 @@ function Invoke-JavaBrokeredChildCharacterization {
   Stop-Process -Id $broker.Id -ErrorAction SilentlyContinue
 }
 
+function Invoke-InheritedStdioProof {
+  param([string]$AppExe, [string]$TempDir)
+  $parentPidFile = Join-Path $TempDir 'stdio-parent.pid'
+  $childPidFile = Join-Path $TempDir 'stdio-child.pid'
+  Invoke-SpawnCleanupProof -Label 'stdio-hold-open' -AppCommand (Quote-CommandPath $AppExe) -ParentPidFile $parentPidFile -ChildPidFile $childPidFile
+}
+
+function Invoke-ConsoleCtrlBreakProof {
+  param([string]$AppExe, [string]$TempDir)
+  $pidFile = Join-Path $TempDir 'console-trap.pid'
+  $eventFile = Join-Path $TempDir 'console-trap.event'
+  $proc = Start-TiniWrapped -ArgsLine ('--stop-timeout 2s -- ' + (Quote-CommandPath $AppExe) + ' --mode run --duration 30 --event-file "' + $eventFile + '" --pid-file "' + $pidFile + '"')
+  Wait-ForFile -Path $pidFile
+  $targetPid = Read-PidFile $pidFile
+  & $AppExe --mode send-break --target-pid $targetPid | Out-Null
+  Wait-ForFile -Path $eventFile -TimeoutSeconds 5
+  Wait-ForProcessGone -TargetPid $targetPid -TimeoutSeconds 5
+  Wait-Process -Id $proc.Id -ErrorAction SilentlyContinue
+  $event = (Get-Content -Raw $eventFile).Trim()
+  if ($event -notmatch 'interrupt') { throw "console-trap expected interrupt event, got '$event'" }
+  Write-Host "console-trap event=$event"
+}
+
+function Invoke-ScheduledTaskEscapeCharacterization {
+  param([string]$SimpleExitExe, [string]$TempDir)
+  $taskName = 'tini-win-proof-' + [guid]::NewGuid().ToString('N')
+  $pidFile = Join-Path $TempDir ($taskName + '.pid')
+  $taskCommand = 'cmd /c ""' + $SimpleExitExe + '" --pid-file "' + $pidFile + '" --sleep-ms 30000"'
+  schtasks /Create /TN $taskName /SC ONCE /ST 23:59 /TR $taskCommand /F | Out-Null
+  try {
+    schtasks /Run /TN $taskName | Out-Null
+    Wait-ForFile -Path $pidFile -TimeoutSeconds 12
+    $childPid = Read-PidFile $pidFile
+    if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+      Write-Host "scheduled-task child pid=$childPid started outside tini-win job control (gap exposed)"
+      taskkill /PID $childPid /T /F | Out-Null
+      Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
+    } else {
+      throw "scheduled-task child pid=$childPid was not running after task launch"
+    }
+  } finally {
+    schtasks /Delete /TN $taskName /F | Out-Null
+  }
+}
+
+function Invoke-WmiEscapeCharacterization {
+  param([string]$SimpleExitExe, [string]$TempDir)
+  $pidFile = Join-Path $TempDir 'wmi-child.pid'
+  $cmd = '"' + $SimpleExitExe + '" --pid-file "' + $pidFile + '" --sleep-ms 30000'
+  $res = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $cmd }
+  if ($res.ReturnValue -ne 0) { throw "WMI process create failed with return value $($res.ReturnValue)" }
+  Wait-ForFile -Path $pidFile -TimeoutSeconds 12
+  $childPid = Read-PidFile $pidFile
+  if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+    Write-Host "wmi child pid=$childPid started outside tini-win job control (gap exposed)"
+    taskkill /PID $childPid /T /F | Out-Null
+    Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
+  } else {
+    throw "wmi child pid=$childPid was not running after WMI launch"
+  }
+}
+
 function Invoke-PortRebindProof {
   param([string]$AppExe, [string]$TempDir)
   $port = 18190
@@ -435,9 +497,25 @@ Write-Host "== Case 22: brokered-child characterization =="
 Invoke-BrokeredChildCharacterization -Label 'brokered-child' -AppPath (Join-Path $testAppsDir 'brokered-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 23: graceful-stop quoting tests =="
+Write-Host "== Case 23: inherited stdio hold-open cleanup =="
+Invoke-InheritedStdioProof -AppExe (Join-Path $testAppsDir 'stdio-hold-open.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 24: console ctrl-break graceful stop =="
+Invoke-ConsoleCtrlBreakProof -AppExe (Join-Path $testAppsDir 'console-trap.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 25: scheduled-task external launch characterization =="
+Invoke-ScheduledTaskEscapeCharacterization -SimpleExitExe (Join-Path $testAppsDir 'simple-exit.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 26: WMI external launch characterization =="
+Invoke-WmiEscapeCharacterization -SimpleExitExe (Join-Path $testAppsDir 'simple-exit.exe') -TempDir $tempDir
+
+Write-Host ""
+Write-Host "== Case 27: graceful-stop quoting tests =="
 go test .\internal\runner -run TestSplitCommandLine -v
 
 Write-Host ""
-Write-Host "== Case 24: restart / port-rebind server =="
+Write-Host "== Case 28: restart / port-rebind server =="
 go test .\internal\runner -run TestRunContext_PortRebindServerRestartsCleanly -v

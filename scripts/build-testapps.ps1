@@ -11,7 +11,9 @@ $targets = @(
   @{ Path = '.\testapps\breakaway-child'; Out = '.\bin\testapps\breakaway-child.exe' },
   @{ Path = '.\testapps\relaunch-orphan'; Out = '.\bin\testapps\relaunch-orphan.exe' },
   @{ Path = '.\testapps\brokered-child'; Out = '.\bin\testapps\brokered-child.exe' },
-  @{ Path = '.\testapps\port-rebind-server'; Out = '.\bin\testapps\port-rebind-server.exe' }
+  @{ Path = '.\testapps\port-rebind-server'; Out = '.\bin\testapps\port-rebind-server.exe' },
+  @{ Path = '.\testapps\stdio-hold-open'; Out = '.\bin\testapps\stdio-hold-open.exe' },
+  @{ Path = '.\testapps\console-trap'; Out = '.\bin\testapps\console-trap.exe' }
 )
 
 foreach ($t in $targets) {
