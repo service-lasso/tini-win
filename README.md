@@ -145,8 +145,8 @@ But it is not a drop-in flag-compatible clone of upstream `tini`.
 | --- | --- | --- |
 | `-- PROGRAM [ARGS...]` | Supported | Supported |
 | `-v` | Supported | Supported |
-| `-h` / help | Supported | Supported via Go `flag` help |
-| `--version` | Supported | Not implemented as a dedicated switch |
+| `-h` / help | Supported | Supported explicitly via `-h` and `--help` |
+| `--version` | Supported | Supported explicitly via `--version` |
 | `-e <code>` exit remap | Supported | Supported via `--remap-exit <from:to[,from:to...]>` |
 | `-g` process-group style kill | Supported | Roughly analogous via `--kill-tree`, but implemented with Windows Job Objects rather than Unix process groups |
 | `-s` subreaper mode | Supported | Not applicable / not implemented |

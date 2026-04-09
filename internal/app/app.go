@@ -15,6 +15,47 @@ import (
 	"github.com/service-lasso/tini-win/internal/runner"
 )
 
+var Version = "dev"
+
+func WantsHelp(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+func WantsVersion(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "--version" {
+			return true
+		}
+	}
+	return false
+}
+
+func WriteHelp(w io.Writer) {
+	fmt.Fprint(w, "tini-win - Windows-native tiny process babysitter\n\n")
+	fmt.Fprint(w, "Usage:\n")
+	fmt.Fprint(w, "  tini-win [OPTIONS] -- PROGRAM [ARGS...]\n\n")
+	fmt.Fprint(w, "Options:\n")
+	fmt.Fprint(w, "  -h, --help             Show help\n")
+	fmt.Fprint(w, "      --version          Show version\n")
+	fmt.Fprint(w, "      --graceful-stop    Command to run for graceful shutdown\n")
+	fmt.Fprint(w, "      --stop-timeout     Graceful stop timeout (default 15s)\n")
+	fmt.Fprint(w, "      --kill-tree        Kill process tree on forced stop (default true)\n")
+	fmt.Fprint(w, "      --allow-breakaway  Allow explicit child breakaway from the job object\n")
+	fmt.Fprint(w, "      --remap-exit       Remap exit codes, e.g. 143:0,137:0\n")
+	fmt.Fprint(w, "  -v                     Verbose logs\n")
+}
+
 func Run(args []string, stdout, stderr io.Writer) error {
 	cfg, err := ParseArgs(args)
 	if err != nil {

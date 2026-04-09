@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,5 +58,34 @@ func TestParseArgs_MissingCommandAfterSeparator(t *testing.T) {
 	_, err := ParseArgs([]string{"--"})
 	if err == nil {
 		t.Fatalf("expected missing command after separator error")
+	}
+}
+
+func TestWantsHelp(t *testing.T) {
+	if !WantsHelp([]string{"--help"}) || !WantsHelp([]string{"-h"}) {
+		t.Fatalf("expected help flags to be recognized")
+	}
+	if WantsHelp([]string{"--", "--help"}) {
+		t.Fatalf("did not expect help after separator to be treated as app help")
+	}
+}
+
+func TestWantsVersion(t *testing.T) {
+	if !WantsVersion([]string{"--version"}) {
+		t.Fatalf("expected version flag to be recognized")
+	}
+	if WantsVersion([]string{"--", "--version"}) {
+		t.Fatalf("did not expect version after separator to be treated as app version")
+	}
+}
+
+func TestWriteHelp(t *testing.T) {
+	var buf bytes.Buffer
+	WriteHelp(&buf)
+	out := buf.String()
+	for _, needle := range []string{"Usage:", "--version", "--help", "--graceful-stop"} {
+		if !strings.Contains(out, needle) {
+			t.Fatalf("expected help output to contain %q, got %q", needle, out)
+		}
 	}
 }
