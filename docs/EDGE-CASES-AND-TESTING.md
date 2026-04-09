@@ -223,5 +223,59 @@ Important interpretation:
 - it does not mean the default `tini-win` posture should allow breakaway
 
 Still not fully proven:
-- a successful explicit breakaway child in this environment
 - service-control-manager / COM / other privileged broker launch paths beyond the scheduler/WMI coverage already added
+
+## Example matrix
+
+This is the concrete example-by-example inventory of what is currently exercised.
+
+### Dedicated `testapps/` fixtures
+
+| Example | Purpose | Expected / observed result |
+| --- | --- | --- |
+| `simple-exit` | Baseline one-child launch/wait/exit passthrough | Exits cleanly, PID file is written, exit status propagates |
+| `spawn-child` | Parent spawns normal child in the same job tree | Parent + child are both cleaned up by wrapper/job teardown |
+| `ignore-stop` | Long-running process that does not stop cleanly on its own | Graceful wait times out, forced cleanup happens |
+| `graceful-stop` | Process with explicit graceful stop command | Signal command succeeds and process exits cleanly |
+| `relaunch-orphan` | Parent spawns replacement child and exits quickly | Replacement child is still cleaned up under the normal runner model |
+| `brokered-child` | Already-running external broker spawns work on behalf of wrapped client | Broker-spawned child survives wrapped client shutdown, confirmed escape gap |
+| `breakaway-child` default | Child tries explicit Windows breakaway from default job | Breakaway attempt is blocked in default mode in this environment (`Access is denied`) |
+| `breakaway-child` with `--allow-breakaway` | Child tries explicit Windows breakaway when job explicitly allows it | Successful breakaway escape is positively proven in this environment |
+| `port-rebind-server` | Service restart / port reuse behavior | Port is reusable after shutdown and restart test passes |
+| `stdio-hold-open` | Child inherits stdout/stderr and keeps handles active | Cleanup still succeeds in the current proof |
+| `console-trap` | Console control-event aware process | Ctrl-break delivery is observed and exits cleanly |
+
+### Go sample example
+
+| Example | Purpose | Expected / observed result |
+| --- | --- | --- |
+| Go `graceful-stop` sample | More app-like graceful shutdown behavior | Graceful stop works correctly through `tini-win` |
+
+### Java sample examples
+
+| Example | Purpose | Expected / observed result |
+| --- | --- | --- |
+| Java `spawn-child` | Normal JVM child launch via managed path | Cleanup succeeds |
+| Java `ignore-stop` | Long-running JVM process requiring forced cleanup | Forced cleanup succeeds |
+| Java `spawn-child-shell` | `ProcessBuilder` shell-indirected launch | Cleanup succeeds |
+| Java `runtime-exec-array` | `Runtime.exec(String[])` launch path | Cleanup succeeds |
+| Java `runtime-exec-string` | `Runtime.exec(String)` launch path | Cleanup succeeds |
+| Java `batch-wrapper-child` | Java launches through a batch wrapper | Cleanup succeeds |
+| Java `relaunch-orphan` | JVM process spawns replacement child and exits | Replacement child is cleaned up correctly |
+| Java `broker` / `client` | External broker pattern driven from Java | Broker-spawned child survives wrapped client shutdown, confirmed escape gap |
+
+### nginx examples
+
+| Example | Purpose | Expected / observed result |
+| --- | --- | --- |
+| nginx `healthy` | Valid config with `/health` endpoint | Starts, serves `/health`, and exits cleanly via quit |
+| nginx `forced wrapper-only teardown` | Start nginx master/workers and stop only through wrapper/job teardown | nginx master/workers die without sending `nginx -s quit` |
+| nginx `no-health` | Valid config without `/health` handler | Serves `/`, returns 404 on `/health`, exits cleanly via quit |
+| nginx `invalid-config` | Invalid startup config | Fails fast with nginx error |
+
+### External-launch characterizations
+
+| Example | Purpose | Expected / observed result |
+| --- | --- | --- |
+| Task Scheduler launch | Work created by Windows Task Scheduler | Starts outside ordinary `tini-win` job containment, confirmed external escape class |
+| WMI / `Win32_Process.Create` launch | Work created by WMI process creation | Starts outside ordinary `tini-win` job containment, confirmed external escape class |

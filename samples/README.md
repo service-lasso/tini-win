@@ -70,3 +70,5 @@ That means:
 - not the same as Unix `fork()`: on Windows, Java child creation here is effectively Windows process launch behavior, not classic fork semantics
 
 The sample apps exist to simulate app-level lifecycle behavior while still being deterministic enough for local proof runs.
+
+For the full cross-repo example inventory, including the observed result for each Java sample mode, see the example matrix in `docs/EDGE-CASES-AND-TESTING.md`.

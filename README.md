@@ -194,3 +194,4 @@ You can still manually override the version in `workflow_dispatch` if needed, bu
 - The nginx proof path uses a PowerShell job launch because `Start-Process` can lose the `--` separator and misroute child flags like `-p` into `tini-win` parsing.
 - License: Apache 2.0 (`LICENSE`).
 - See `docs/SPEC.md`, `docs/EDGE-CASES-AND-TESTING.md`, and `samples/README.md` for scope and validation details.
+- `docs/EDGE-CASES-AND-TESTING.md` now includes an explicit example-by-example matrix covering every current proof fixture and its observed result.
