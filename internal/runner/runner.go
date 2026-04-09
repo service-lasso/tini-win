@@ -41,7 +41,7 @@ func RunContext(ctx context.Context, cfg Config, stdout, stderr io.Writer) error
 		return fmt.Errorf("start child: %w", err)
 	}
 
-	job, err := createAndAssignJobObject(uint32(child.Process.Pid), cfg.KillTree)
+	job, err := createAndAssignJobObject(uint32(child.Process.Pid), cfg.KillTree, cfg.AllowBreakaway)
 	if err != nil {
 		_ = child.Process.Kill()
 		_ = child.Wait()

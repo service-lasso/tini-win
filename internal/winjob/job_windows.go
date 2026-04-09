@@ -11,15 +11,20 @@ import (
 
 type Handle = windows.Handle
 
-func CreateAndAssign(pid uint32, killOnClose bool) (Handle, error) {
+func CreateAndAssign(pid uint32, killOnClose bool, allowBreakaway bool) (Handle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return 0, fmt.Errorf("CreateJobObject: %w", err)
 	}
 
-	if killOnClose {
+	if killOnClose || allowBreakaway {
 		var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-		info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+		if killOnClose {
+			info.BasicLimitInformation.LimitFlags |= windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+		}
+		if allowBreakaway {
+			info.BasicLimitInformation.LimitFlags |= windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK
+		}
 		_, err = windows.SetInformationJobObject(
 			job,
 			windows.JobObjectExtendedLimitInformation,

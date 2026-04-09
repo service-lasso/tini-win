@@ -45,6 +45,7 @@ func ParseArgs(args []string) (runner.Config, error) {
 	fs.StringVar(&cfg.GracefulStop, "graceful-stop", "", "graceful stop command")
 	fs.StringVar(&stopTimeout, "stop-timeout", "15s", "graceful stop timeout")
 	fs.BoolVar(&cfg.KillTree, "kill-tree", true, "kill process tree on forced stop")
+	fs.BoolVar(&cfg.AllowBreakaway, "allow-breakaway", false, "allow explicit child breakaway from the job object")
 	fs.BoolVar(&cfg.Verbose, "v", false, "verbose logs")
 	fs.StringVar(&remap, "remap-exit", "", "remap exit codes, e.g. 143:0,137:0")
 

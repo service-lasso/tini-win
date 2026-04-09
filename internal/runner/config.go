@@ -4,12 +4,13 @@ import "time"
 
 // Config controls one tini-win execution.
 type Config struct {
-	Command       []string
-	GracefulStop  string
-	StopTimeout   time.Duration
-	KillTree      bool
-	Verbose       bool
-	RemapExitCode map[int]int
+	Command         []string
+	GracefulStop    string
+	StopTimeout     time.Duration
+	KillTree        bool
+	AllowBreakaway  bool
+	Verbose         bool
+	RemapExitCode   map[int]int
 }
 
 // ExitCodeError indicates a process completed with a specific exit code.

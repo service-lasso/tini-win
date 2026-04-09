@@ -119,6 +119,19 @@ Current proof coverage includes:
 - external WMI launch characterization
 - restart/port-rebind integration proof
 
+## Current observed findings
+
+What the current proof set shows:
+- normal descendants in the same Job Object clean up correctly
+- relaunch-orphan cleanup works under the current runner model
+- Java normal launch paths also clean up correctly under the same job-tree model
+- inherited stdio alone did not break cleanup in the current proof
+- ctrl-break aware apps can be exercised explicitly with the console fixture
+- brokered work is a real escape path, both in the dedicated native broker fixture and the Java broker/client fixture
+- Task Scheduler and WMI launches are real out-of-job-process creation paths and should be treated as outside ordinary `tini-win` containment
+- explicit breakaway creation is blocked under the default job configuration in this environment (`Access is denied`)
+- explicit breakaway creation is now also positively proven in this environment when `tini-win` is started with `--allow-breakaway`, which enables `JOB_OBJECT_LIMIT_BREAKAWAY_OK` for characterization/testing
+
 ## Release pipeline
 
 Local packaging:
@@ -170,11 +183,13 @@ You can still manually override the version in `workflow_dispatch` if needed, bu
 - This is a Windows-native tiny supervisor, not a full service manager.
 - It is intentionally focused on one-child lifecycle control.
 - A `breakaway child` means a spawned process that escapes the parent Job Object and may survive cleanup that kills the normal job tree.
+- `--allow-breakaway` is now available as an explicit opt-in characterization/testing mode. It weakens containment on purpose so successful breakaway behavior can be proven when needed; it should not be treated as the normal safe default.
 - Current Java proof coverage now includes normal JVM lifecycle plus Java-specific launch paths like `ProcessBuilder`, `Runtime.exec(String[])`, `Runtime.exec(String)`, batch-wrapper launch, relaunch-orphan, and broker/client characterization.
 - On Windows, Java does not use Unix `fork()` semantics in the usual sense. `ProcessBuilder` or `Runtime.exec(...)` normally create a child process, which should remain in the same Job Object unless launched through some external broker/escape mechanism.
 - External launch paths like Task Scheduler and WMI are now explicitly characterized as out-of-job-process creation paths, and they do produce independently running work outside ordinary `tini-win` containment.
 - Console-control-event behavior is now characterized with a ctrl-break-aware fixture so apps that rely on control events can be tested explicitly.
 - The remaining Java-specific gap is true in-JVM breakaway creation with explicit Windows breakaway flags. That is not yet proven here.
+- The broader remaining limitation is simple: `tini-win` is strong for ordinary descendants in the wrapped job tree, but it should not claim universal containment across all Windows launch mechanisms.
 - The nginx proof path uses a PowerShell job launch because `Start-Process` can lose the `--` separator and misroute child flags like `-p` into `tini-win` parsing.
 - License: Apache 2.0 (`LICENSE`).
 - See `docs/SPEC.md`, `docs/EDGE-CASES-AND-TESTING.md`, and `samples/README.md` for scope and validation details.

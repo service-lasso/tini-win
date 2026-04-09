@@ -287,6 +287,57 @@ func TestRunContext_BreakawayChildCharacterization(t *testing.T) {
 	waitForProcessState(t, childPID, false, 5*time.Second)
 }
 
+func TestRunContext_BreakawayChildEscapesWhenAllowed(t *testing.T) {
+	exe := buildTestApp(t, "breakaway-child")
+	tempDir := t.TempDir()
+	parentPIDFile := filepath.Join(tempDir, "breakaway-allowed-parent.pid")
+	childPIDFile := filepath.Join(tempDir, "breakaway-allowed-child.pid")
+	statusFile := filepath.Join(tempDir, "breakaway-allowed.status")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, errb bytes.Buffer
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunContext(ctx, Config{
+			Command:        []string{exe, "--duration", "30", "--pid-file", parentPIDFile, "--child-pid-file", childPIDFile, "--status-file", statusFile},
+			StopTimeout:    500 * time.Millisecond,
+			KillTree:       true,
+			AllowBreakaway: true,
+			Verbose:        true,
+			RemapExitCode:  map[int]int{137: 0},
+		}, &out, &errb)
+	}()
+
+	waitForPIDFile(t, parentPIDFile, 5*time.Second)
+	waitForFileExists(t, statusFile, 5*time.Second)
+	statusBytes, _ := os.ReadFile(statusFile)
+	status := strings.TrimSpace(string(statusBytes))
+	if strings.HasPrefix(status, "spawn-error:") {
+		cancel()
+		<-errCh
+		t.Fatalf("expected successful breakaway spawn when allow-breakaway is enabled, got %q\nstdout:\n%s\nstderr:\n%s", status, out.String(), errb.String())
+	}
+	childPID := waitForPIDFile(t, childPIDFile, 5*time.Second)
+	waitForProcessState(t, childPID, true, 3*time.Second)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("expected breakaway-allowed wrapper shutdown to succeed, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatalf("timeout waiting for breakaway-allowed characterization\nstdout:\n%s\nstderr:\n%s", out.String(), errb.String())
+	}
+
+	if !processExists(childPID) {
+		t.Fatalf("expected breakaway child pid %d to survive when allow-breakaway is enabled\nstdout:\n%s\nstderr:\n%s", childPID, out.String(), errb.String())
+	}
+	_ = exec.Command("taskkill", "/PID", strconv.Itoa(childPID), "/T", "/F").Run()
+	waitForProcessState(t, childPID, false, 5*time.Second)
+}
+
 func TestRunContext_PortRebindServerRestartsCleanly(t *testing.T) {
 	exe := buildTestApp(t, "port-rebind-server")
 	tempDir := t.TempDir()

@@ -153,7 +153,7 @@ Use after the smaller proof targets pass.
 ### E. Escape-path characterization
 - relaunch/orphan behavior is understood
 - brokered-child escape paths are characterized
-- breakaway-child behavior is characterized, including environment-dependent failure to create a breakaway child
+- breakaway-child behavior is characterized, including the default blocked case and the successful opt-in breakaway case when the job explicitly allows it
 - external scheduler/WMI launch paths are characterized as out-of-job-process creation paths
 
 ### F. Handle / output behavior
@@ -201,3 +201,25 @@ Optionally test one heavier real JVM-based service with more complex descendant 
 - manage graceful stop and forced cleanup correctly
 - prove nginx lifecycle control on Windows, including scenario-driven config variation, well enough for real use
 - clearly document the remaining limits around brokered work, breakaway attempts, scheduler/WMI/service-style external launch paths, and other escape paths that are outside ordinary job-tree containment
+
+## Current characterized results
+
+Observed in the current proof set:
+- ordinary descendants in the same Job Object are cleaned up correctly
+- relaunch-orphan patterns are cleaned up correctly in the current runner model
+- Java launch variants tested so far behave like normal managed children unless they explicitly hand work off to an external broker
+- inherited stdio / handle-hold behavior did not block cleanup in the current fixture
+- ctrl-break aware console apps can be exercised and observed separately from plain forced termination
+- brokered-child is a confirmed escape gap
+- Task Scheduler and WMI launches are confirmed external-launch escape paths
+- explicit breakaway creation is blocked by default in this environment (`Access is denied`)
+- explicit breakaway creation is positively proven when the job is created with breakaway explicitly allowed (`JOB_OBJECT_LIMIT_BREAKAWAY_OK` / `--allow-breakaway`)
+
+Important interpretation:
+- the successful breakaway proof is an opt-in weakening of containment for characterization/testing
+- it proves the escape path is real in this environment
+- it does not mean the default `tini-win` posture should allow breakaway
+
+Still not fully proven:
+- a successful explicit breakaway child in this environment
+- service-control-manager / COM / other privileged broker launch paths beyond the scheduler/WMI coverage already added

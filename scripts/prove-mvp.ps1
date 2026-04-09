@@ -174,27 +174,35 @@ function Invoke-NginxInvalidConfigProof {
 }
 
 function Invoke-BreakawayCharacterization {
-  param([string]$AppExe, [string]$TempDir)
-  $parentPidFile = Join-Path $TempDir 'breakaway-parent.pid'
-  $childPidFile = Join-Path $TempDir 'breakaway-child.pid'
-  $statusFile = Join-Path $TempDir 'breakaway.status'
-  $proc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppExe) + ' --duration 30 --pid-file "' + $parentPidFile + '" --child-pid-file "' + $childPidFile + '" --status-file "' + $statusFile + '"')
+  param([string]$AppExe, [string]$TempDir, [switch]$AllowBreakaway)
+  $prefix = if ($AllowBreakaway) { 'breakaway-allowed' } else { 'breakaway' }
+  $parentPidFile = Join-Path $TempDir ($prefix + '-parent.pid')
+  $childPidFile = Join-Path $TempDir ($prefix + '-child.pid')
+  $statusFile = Join-Path $TempDir ($prefix + '.status')
+  $breakawayArg = if ($AllowBreakaway) { '--allow-breakaway ' } else { '' }
+  $proc = Start-TiniWrapped -ArgsLine ($breakawayArg + '--stop-timeout 500ms --remap-exit 137:0 -- ' + (Quote-CommandPath $AppExe) + ' --duration 30 --pid-file "' + $parentPidFile + '" --child-pid-file "' + $childPidFile + '" --status-file "' + $statusFile + '"')
   Wait-ForFile -Path $parentPidFile
   Wait-ForFile -Path $statusFile
   $status = (Get-Content -Raw $statusFile).Trim()
   Stop-Process -Id $proc.Id
   Wait-Process -Id $proc.Id -ErrorAction SilentlyContinue
   if ($status -like 'spawn-error:*') {
+    if ($AllowBreakaway) { throw "breakaway-child expected success with --allow-breakaway, got $status" }
     Write-Host "breakaway-child status=$status (breakaway blocked under current job model)"
     return
   }
   $childPid = Read-PidFile $childPidFile
   Start-Sleep -Seconds 1
   if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
-    Write-Host "breakaway-child spawned pid=$childPid and survived wrapper stop (gap exposed)"
+    if ($AllowBreakaway) {
+      Write-Host "breakaway-child spawned pid=$childPid and survived wrapper stop with --allow-breakaway (real breakaway confirmed)"
+    } else {
+      Write-Host "breakaway-child spawned pid=$childPid and survived wrapper stop (gap exposed)"
+    }
     taskkill /PID $childPid /T /F | Out-Null
     Wait-ForProcessGone -TargetPid $childPid -TimeoutSeconds 5
   } else {
+    if ($AllowBreakaway) { throw "breakaway-child did not survive even with --allow-breakaway" }
     Write-Host "breakaway-child spawned pid=$childPid but was still cleaned up under wrapper stop"
   }
 }
@@ -489,33 +497,37 @@ Write-Host "== Case 20: breakaway-child characterization =="
 Invoke-BreakawayCharacterization -AppExe (Join-Path $testAppsDir 'breakaway-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 21: relaunch-orphan cleanup =="
+Write-Host "== Case 21: breakaway-child successful escape with allow-breakaway =="
+Invoke-BreakawayCharacterization -AppExe (Join-Path $testAppsDir 'breakaway-child.exe') -TempDir $tempDir -AllowBreakaway
+
+Write-Host ""
+Write-Host "== Case 22: relaunch-orphan cleanup =="
 Invoke-RelaunchOrphanProof -Label 'relaunch-orphan' -AppCommand (Quote-CommandPath (Join-Path $testAppsDir 'relaunch-orphan.exe')) -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 22: brokered-child characterization =="
+Write-Host "== Case 23: brokered-child characterization =="
 Invoke-BrokeredChildCharacterization -Label 'brokered-child' -AppPath (Join-Path $testAppsDir 'brokered-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 23: inherited stdio hold-open cleanup =="
+Write-Host "== Case 24: inherited stdio hold-open cleanup =="
 Invoke-InheritedStdioProof -AppExe (Join-Path $testAppsDir 'stdio-hold-open.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 24: console ctrl-break graceful stop =="
+Write-Host "== Case 25: console ctrl-break graceful stop =="
 Invoke-ConsoleCtrlBreakProof -AppExe (Join-Path $testAppsDir 'console-trap.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 25: scheduled-task external launch characterization =="
+Write-Host "== Case 26: scheduled-task external launch characterization =="
 Invoke-ScheduledTaskEscapeCharacterization -SimpleExitExe (Join-Path $testAppsDir 'simple-exit.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 26: WMI external launch characterization =="
+Write-Host "== Case 27: WMI external launch characterization =="
 Invoke-WmiEscapeCharacterization -SimpleExitExe (Join-Path $testAppsDir 'simple-exit.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 27: graceful-stop quoting tests =="
+Write-Host "== Case 28: graceful-stop quoting tests =="
 go test .\internal\runner -run TestSplitCommandLine -v
 
 Write-Host ""
-Write-Host "== Case 28: restart / port-rebind server =="
+Write-Host "== Case 29: restart / port-rebind server =="
 go test .\internal\runner -run TestRunContext_PortRebindServerRestartsCleanly -v
