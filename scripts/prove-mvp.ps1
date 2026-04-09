@@ -122,6 +122,18 @@ function Start-NginxTiniJob {
   } -ArgumentList $tiniWinExe, $localNginxExe, $InstanceDir, $ConfPath
 }
 
+function Get-NginxPidsForInstance {
+  param([string]$ExePath, [string]$InstanceDir)
+  $normalizedExe = [System.IO.Path]::GetFullPath($ExePath)
+  $normalizedInstance = [System.IO.Path]::GetFullPath($InstanceDir)
+  $procs = Get-CimInstance Win32_Process -Filter "Name = 'nginx.exe'" -ErrorAction SilentlyContinue
+  @($procs | Where-Object {
+    $_.ExecutablePath -and $_.CommandLine -and
+    ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $normalizedExe) -and
+    ($_.CommandLine -like ('*' + $normalizedInstance + '*'))
+  } | Select-Object -ExpandProperty ProcessId)
+}
+
 function Invoke-NginxHealthyProof {
   param([string]$InstanceDir, [int]$Port)
   $pidFile = Join-Path $InstanceDir 'logs\nginx.pid'
@@ -138,6 +150,34 @@ function Invoke-NginxHealthyProof {
   Receive-Job $job -Keep | Out-Null
   Remove-Job $job -Force
   Write-Host "nginx healthy pid=$masterPid served /health and exited cleanly after quit"
+}
+
+function Invoke-NginxForcedKillProof {
+  param([string]$InstanceDir, [int]$Port)
+  $pidFile = Join-Path $InstanceDir 'logs\nginx.pid'
+  $conf = Join-Path $InstanceDir 'conf\nginx.conf'
+  $proc = Start-TiniWrapped -ArgsLine ('--stop-timeout 500ms --remap-exit 137:0 -- "' + $localNginxExe + '" -p "' + $InstanceDir + '" -c "' + $conf + '"')
+  Wait-ForFile -Path $pidFile -TimeoutSeconds 15
+  $masterPid = Read-PidFile $pidFile
+  Assert-ProcessExists -TargetPid $masterPid -Message "nginx forced-kill master pid $masterPid was not observed running"
+  $null = Wait-ForHttpStatus -Url ("http://127.0.0.1:$Port/") -ExpectedStatus 200 -TimeoutSeconds 15
+  $nginxPidsBefore = Get-NginxPidsForInstance -ExePath $localNginxExe -InstanceDir $InstanceDir
+  if ($nginxPidsBefore.Count -lt 2) {
+    throw "expected nginx master+worker processes before forced kill, got $($nginxPidsBefore -join ',')"
+  }
+  Stop-Process -Id $proc.Id
+  Wait-Process -Id $proc.Id -ErrorAction SilentlyContinue
+  Wait-ForProcessGone -TargetPid $masterPid -TimeoutSeconds 15
+  $deadline = (Get-Date).AddSeconds(10)
+  do {
+    $remaining = Get-NginxPidsForInstance -ExePath $localNginxExe -InstanceDir $InstanceDir
+    if (-not $remaining -or $remaining.Count -eq 0) {
+      Write-Host "nginx forced-kill removed master/workers without nginx -s quit"
+      return
+    }
+    Start-Sleep -Milliseconds 250
+  } while ((Get-Date) -lt $deadline)
+  throw "expected no nginx.exe processes for instance $InstanceDir after forced wrapper teardown, remaining=$($remaining -join ',')"
 }
 
 function Invoke-NginxNoHealthProof {
@@ -481,53 +521,59 @@ Render-NginxScenario -Scenario 'healthy' -Port 18080 -OutputDir $nginxHealthyDir
 Invoke-NginxHealthyProof -InstanceDir $nginxHealthyDir -Port 18080
 
 Write-Host ""
-Write-Host "== Case 18: nginx no-health scenario =="
-$nginxNoHealthDir = Join-Path $tempDir 'nginx-no-health'
-Render-NginxScenario -Scenario 'no-health' -Port 18081 -OutputDir $nginxNoHealthDir
-Invoke-NginxNoHealthProof -InstanceDir $nginxNoHealthDir -Port 18081
+Write-Host "== Case 18: nginx forced wrapper-only teardown =="
+$nginxForcedDir = Join-Path $tempDir 'nginx-forced'
+Render-NginxScenario -Scenario 'no-health' -Port 18081 -OutputDir $nginxForcedDir
+Invoke-NginxForcedKillProof -InstanceDir $nginxForcedDir -Port 18081
 
 Write-Host ""
-Write-Host "== Case 19: nginx invalid-config scenario =="
+Write-Host "== Case 19: nginx no-health scenario =="
+$nginxNoHealthDir = Join-Path $tempDir 'nginx-no-health'
+Render-NginxScenario -Scenario 'no-health' -Port 18082 -OutputDir $nginxNoHealthDir
+Invoke-NginxNoHealthProof -InstanceDir $nginxNoHealthDir -Port 18082
+
+Write-Host ""
+Write-Host "== Case 20: nginx invalid-config scenario =="
 $nginxInvalidDir = Join-Path $tempDir 'nginx-invalid'
-Render-NginxScenario -Scenario 'invalid-config' -Port 18082 -OutputDir $nginxInvalidDir
+Render-NginxScenario -Scenario 'invalid-config' -Port 18083 -OutputDir $nginxInvalidDir
 Invoke-NginxInvalidConfigProof -InstanceDir $nginxInvalidDir
 
 Write-Host ""
-Write-Host "== Case 20: breakaway-child characterization =="
+Write-Host "== Case 21: breakaway-child characterization =="
 Invoke-BreakawayCharacterization -AppExe (Join-Path $testAppsDir 'breakaway-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 21: breakaway-child successful escape with allow-breakaway =="
+Write-Host "== Case 22: breakaway-child successful escape with allow-breakaway =="
 Invoke-BreakawayCharacterization -AppExe (Join-Path $testAppsDir 'breakaway-child.exe') -TempDir $tempDir -AllowBreakaway
 
 Write-Host ""
-Write-Host "== Case 22: relaunch-orphan cleanup =="
+Write-Host "== Case 23: relaunch-orphan cleanup =="
 Invoke-RelaunchOrphanProof -Label 'relaunch-orphan' -AppCommand (Quote-CommandPath (Join-Path $testAppsDir 'relaunch-orphan.exe')) -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 23: brokered-child characterization =="
+Write-Host "== Case 24: brokered-child characterization =="
 Invoke-BrokeredChildCharacterization -Label 'brokered-child' -AppPath (Join-Path $testAppsDir 'brokered-child.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 24: inherited stdio hold-open cleanup =="
+Write-Host "== Case 25: inherited stdio hold-open cleanup =="
 Invoke-InheritedStdioProof -AppExe (Join-Path $testAppsDir 'stdio-hold-open.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 25: console ctrl-break graceful stop =="
+Write-Host "== Case 26: console ctrl-break graceful stop =="
 Invoke-ConsoleCtrlBreakProof -AppExe (Join-Path $testAppsDir 'console-trap.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 26: scheduled-task external launch characterization =="
+Write-Host "== Case 27: scheduled-task external launch characterization =="
 Invoke-ScheduledTaskEscapeCharacterization -SimpleExitExe (Join-Path $testAppsDir 'simple-exit.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 27: WMI external launch characterization =="
+Write-Host "== Case 28: WMI external launch characterization =="
 Invoke-WmiEscapeCharacterization -SimpleExitExe (Join-Path $testAppsDir 'simple-exit.exe') -TempDir $tempDir
 
 Write-Host ""
-Write-Host "== Case 28: graceful-stop quoting tests =="
+Write-Host "== Case 29: graceful-stop quoting tests =="
 go test .\internal\runner -run TestSplitCommandLine -v
 
 Write-Host ""
-Write-Host "== Case 29: restart / port-rebind server =="
+Write-Host "== Case 30: restart / port-rebind server =="
 go test .\internal\runner -run TestRunContext_PortRebindServerRestartsCleanly -v

@@ -124,6 +124,7 @@ Use after the smaller proof targets pass.
 #### What to prove
 - launch works
 - graceful stop command works
+- forced wrapper-only teardown kills nginx master/workers without needing `nginx -s quit`
 - probe behavior can be varied by config scenario
 - startup failure is surfaced cleanly on invalid config
 - no relevant worker processes remain unexpectedly
@@ -206,6 +207,7 @@ Optionally test one heavier real JVM-based service with more complex descendant 
 
 Observed in the current proof set:
 - ordinary descendants in the same Job Object are cleaned up correctly
+- nginx master/workers launched under `tini-win` are cleaned up by wrapper/job teardown alone in the forced-kill proof, without relying on nginx's own quit command
 - relaunch-orphan patterns are cleaned up correctly in the current runner model
 - Java launch variants tested so far behave like normal managed children unless they explicitly hand work off to an external broker
 - inherited stdio / handle-hold behavior did not block cleanup in the current fixture

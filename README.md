@@ -109,7 +109,7 @@ Current proof coverage includes:
 - small lifecycle test apps
 - Go sample project cases
 - Java sample project cases, including Java-specific launch paths (`ProcessBuilder`, `Runtime.exec`, batch-wrapper launch, relaunch-orphan, broker/client characterization)
-- repo-local nginx scenarios
+- repo-local nginx scenarios, including forced wrapper-only teardown without `nginx -s quit`
 - relaunch/orphan cleanup proof
 - brokered-child escape characterization
 - breakaway-child characterization attempt
@@ -131,6 +131,7 @@ What the current proof set shows:
 - Task Scheduler and WMI launches are real out-of-job-process creation paths and should be treated as outside ordinary `tini-win` containment
 - explicit breakaway creation is blocked under the default job configuration in this environment (`Access is denied`)
 - explicit breakaway creation is now also positively proven in this environment when `tini-win` is started with `--allow-breakaway`, which enables `JOB_OBJECT_LIMIT_BREAKAWAY_OK` for characterization/testing
+- nginx master/worker processes launched under `tini-win` are now explicitly proven to die from wrapper/job teardown alone, without telling nginx to quit, in the forced-kill proof path
 
 ## Release pipeline
 
