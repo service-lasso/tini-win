@@ -141,19 +141,28 @@ What the current proof set shows:
 
 But it is not a drop-in flag-compatible clone of upstream `tini`.
 
-| Area | `tini-win` status | Compatibility note |
+| Param / switch / behavior | Upstream `tini` | `tini-win` |
 | --- | --- | --- |
-| Basic `-- PROGRAM [ARGS...]` wrapper model | Supported | Same general invocation shape |
-| Launch one child and wait | Supported | Core behavior aligns conceptually |
-| Return child exit status | Supported | Includes optional exit remap support |
-| Verbose mode | Supported | `-v` exists, but output/details are `tini-win` specific |
-| Graceful stop before forced kill | Supported | Windows-oriented via `--graceful-stop` and `--stop-timeout` |
-| Managed child-tree cleanup | Supported | Implemented with Windows Job Objects, not Unix process-group semantics |
-| Argument-for-argument upstream `tini` flag compatibility | Not compatible | Current flags are `tini-win` specific |
-| Linux PID1 / init semantics | Not compatible | `tini-win` is a Windows babysitter, not a PID1 replacement |
-| Universal containment of all descendant work | Not supported | External brokers, Scheduler, WMI, breakaway, and similar escape paths are real limits |
-| Explicit breakaway proof | Supported for characterization | Only with opt-in `--allow-breakaway`, not the default safe mode |
-| Service Lasso simple-service backend role | Good fit | Same high-level contract, but platform guarantees still differ |
+| `-- PROGRAM [ARGS...]` | Supported | Supported |
+| `-v` | Supported | Supported |
+| `-h` / help | Supported | Supported via Go `flag` help |
+| `--version` | Supported | Not implemented as a dedicated switch |
+| `-e <code>` exit remap | Supported | Supported via `--remap-exit <from:to[,from:to...]>` |
+| `-g` process-group style kill | Supported | Roughly analogous via `--kill-tree`, but implemented with Windows Job Objects rather than Unix process groups |
+| `-s` subreaper mode | Supported | Not applicable / not implemented |
+| `-p <signal>` parent-death signal | Supported | Not implemented |
+| Linux PID1 / zombie reaping semantics | Supported use case | Not applicable on Windows |
+| Graceful stop command before forced kill | Not a core `tini` CLI feature in the same way | Supported via `--graceful-stop` + `--stop-timeout` |
+| Explicit breakaway allowance | Not a normal `tini` concern | Supported for characterization only via `--allow-breakaway` |
+| External-launch containment (Scheduler/WMI/etc.) | Not a guaranteed `tini` feature | Not guaranteed, explicitly proven as escape-class behavior |
+| Service Lasso backend role | Good fit on Linux side | Good fit on Windows side |
+
+### Reading the table
+
+- `tini-win` is **conceptually compatible** with upstream `tini` for the basic one-child wrapper model.
+- It is **not flag-for-flag compatible**.
+- Some rows are intentionally marked not applicable because `tini` solves Linux/PID1 problems that do not map directly to Windows.
+- Some `tini-win` rows go beyond upstream `tini` because Windows needs different controls, especially around graceful stop and job-object behavior.
 
 ## Release pipeline
 
