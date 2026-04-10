@@ -133,6 +133,35 @@ What the current proof set shows:
 - explicit breakaway creation is now also positively proven in this environment when `tini-win` is started with `--allow-breakaway`, which enables `JOB_OBJECT_LIMIT_BREAKAWAY_OK` for characterization/testing
 - nginx master/worker processes launched under `tini-win` are now explicitly proven to die from wrapper/job teardown alone, without telling nginx to quit, in the forced-kill proof path
 
+## Not implemented / out of scope
+
+These are intentionally not implemented, or not fully implemented, in `tini-win` itself:
+
+- full upstream `tini` flag-for-flag compatibility
+- Linux PID1 / subreaper / parent-death-signal semantics
+- universal containment across every Windows launch mechanism
+- service-control-manager or COM-specific launch proofs
+- multi-service orchestration features like dependency graphs, restart policy systems, fleet health management, or install/uninstall lifecycle management
+
+## Characterized but not solved
+
+These areas are now understood and proven as real behaviors, but `tini-win` does not claim to eliminate them:
+
+- brokered-child escape paths
+- Task Scheduler external launch escape paths
+- WMI external launch escape paths
+- explicit breakaway escape when the job is intentionally created with breakaway allowed
+
+## Owned by Service Lasso, not `tini-win`
+
+These belong in a higher-level service platform rather than the tiny babysitter layer:
+
+- dependency ordering between services
+- restart policy orchestration across multiple services
+- health supervision loops and policy decisions
+- install/configure/start/stop/uninstall workflows
+- broader service state, artifact, and log management
+
 ## Compatibility with upstream `tini`
 
 `tini-win` follows the same basic wrapper shape:
