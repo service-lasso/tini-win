@@ -17,6 +17,8 @@ Runnable MVP with repo-local proof fixtures.
 
 Implemented now:
 - CLI parsing with `--` separator
+- child stdout/stderr passthrough by default
+- optional file tailing to stdout (`--tail-file`)
 - child process spawn/wait
 - exit-code passthrough + remap (`--remap-exit`)
 - Windows Job Object assignment
@@ -182,6 +184,7 @@ But it is not a drop-in flag-compatible clone of upstream `tini`.
 | `-p <signal>` parent-death signal | Supported | Not implemented |
 | Linux PID1 / zombie reaping semantics | Supported use case | Not applicable on Windows |
 | Graceful stop command before forced kill | Not a core `tini` CLI feature in the same way | Supported via `--graceful-stop` + `--stop-timeout` |
+| `--tail-file <path>` log tail to stdout | Not a standard `tini` flag | Supported, repeatable |
 | Explicit breakaway allowance | Not a normal `tini` concern | Supported for characterization only via `--allow-breakaway` |
 | External-launch containment (Scheduler/WMI/etc.) | Not a guaranteed `tini` feature | Not guaranteed, explicitly proven as escape-class behavior |
 | Service Lasso backend role | Good fit on Linux side | Good fit on Windows side |
@@ -238,6 +241,18 @@ You can still manually override the version in `workflow_dispatch` if needed, bu
 ```powershell
 .\bin\tini-win.exe --graceful-stop "nginx.exe -s quit" --stop-timeout 15s --kill-tree -- nginx.exe -p C:\instance\nginx -c C:\instance\nginx\conf\nginx.conf
 ```
+
+## Logging model
+
+Default behavior:
+- child stdout/stderr passes through directly
+- `tini-win` only adds lightweight lifecycle output when needed
+
+Optional behavior:
+- use `--tail-file <path>` to mirror a file-backed app log into stdout
+- `--tail-file` is repeatable when an app writes to multiple important files
+
+This is intended as a lightweight bridge for container or orchestrated environments where stdout/stderr should remain the primary log collection path.
 
 ## Notes
 

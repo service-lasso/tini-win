@@ -13,7 +13,8 @@ $targets = @(
   @{ Path = '.\testapps\brokered-child'; Out = '.\bin\testapps\brokered-child.exe' },
   @{ Path = '.\testapps\port-rebind-server'; Out = '.\bin\testapps\port-rebind-server.exe' },
   @{ Path = '.\testapps\stdio-hold-open'; Out = '.\bin\testapps\stdio-hold-open.exe' },
-  @{ Path = '.\testapps\console-trap'; Out = '.\bin\testapps\console-trap.exe' }
+  @{ Path = '.\testapps\console-trap'; Out = '.\bin\testapps\console-trap.exe' },
+  @{ Path = '.\testapps\file-log'; Out = '.\bin\testapps\file-log.exe' }
 )
 
 foreach ($t in $targets) {

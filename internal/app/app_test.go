@@ -33,6 +33,16 @@ func TestParseArgs_Remap(t *testing.T) {
 	}
 }
 
+func TestParseArgs_TailFile(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--tail-file", "a.log", "--tail-file", "b.log", "--", "cmd", "/c", "exit 0"})
+	if err != nil {
+		t.Fatalf("ParseArgs error: %v", err)
+	}
+	if len(cfg.TailFiles) != 2 || cfg.TailFiles[0] != "a.log" || cfg.TailFiles[1] != "b.log" {
+		t.Fatalf("unexpected tail files: %#v", cfg.TailFiles)
+	}
+}
+
 func TestParseArgs_MissingSeparator(t *testing.T) {
 	_, err := ParseArgs([]string{"cmd", "/c", "exit 0"})
 	if err == nil {
@@ -83,7 +93,7 @@ func TestWriteHelp(t *testing.T) {
 	var buf bytes.Buffer
 	WriteHelp(&buf)
 	out := buf.String()
-	for _, needle := range []string{"Usage:", "--version", "--help", "--graceful-stop"} {
+	for _, needle := range []string{"Usage:", "--version", "--help", "--graceful-stop", "--tail-file"} {
 		if !strings.Contains(out, needle) {
 			t.Fatalf("expected help output to contain %q, got %q", needle, out)
 		}

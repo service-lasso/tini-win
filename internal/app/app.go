@@ -52,6 +52,7 @@ func WriteHelp(w io.Writer) {
 	fmt.Fprint(w, "      --stop-timeout     Graceful stop timeout (default 15s)\n")
 	fmt.Fprint(w, "      --kill-tree        Kill process tree on forced stop (default true)\n")
 	fmt.Fprint(w, "      --allow-breakaway  Allow explicit child breakaway from the job object\n")
+	fmt.Fprint(w, "      --tail-file        Tail a log file to stdout (repeatable)\n")
 	fmt.Fprint(w, "      --remap-exit       Remap exit codes, e.g. 143:0,137:0\n")
 	fmt.Fprint(w, "  -v                     Verbose logs\n")
 }
@@ -83,10 +84,12 @@ func ParseArgs(args []string) (runner.Config, error) {
 	fs.SetOutput(io.Discard)
 	var stopTimeout string
 	var remap string
+	var tailFiles multiValueFlag
 	fs.StringVar(&cfg.GracefulStop, "graceful-stop", "", "graceful stop command")
 	fs.StringVar(&stopTimeout, "stop-timeout", "15s", "graceful stop timeout")
 	fs.BoolVar(&cfg.KillTree, "kill-tree", true, "kill process tree on forced stop")
 	fs.BoolVar(&cfg.AllowBreakaway, "allow-breakaway", false, "allow explicit child breakaway from the job object")
+	fs.Var(&tailFiles, "tail-file", "tail a log file to stdout (repeatable)")
 	fs.BoolVar(&cfg.Verbose, "v", false, "verbose logs")
 	fs.StringVar(&remap, "remap-exit", "", "remap exit codes, e.g. 143:0,137:0")
 
@@ -105,9 +108,24 @@ func ParseArgs(args []string) (runner.Config, error) {
 		return cfg, err
 	}
 	cfg.RemapExitCode = m
+	cfg.TailFiles = append(cfg.TailFiles, tailFiles...)
 	cfg.Command = append([]string{}, args[idx+1:]...)
 
 	return cfg, nil
+}
+
+type multiValueFlag []string
+
+func (m *multiValueFlag) String() string {
+	return strings.Join(*m, ",")
+}
+
+func (m *multiValueFlag) Set(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("tail-file must not be empty")
+	}
+	*m = append(*m, value)
+	return nil
 }
 
 func parseRemap(v string) (map[int]int, error) {

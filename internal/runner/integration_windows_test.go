@@ -338,6 +338,28 @@ func TestRunContext_BreakawayChildEscapesWhenAllowed(t *testing.T) {
 	waitForProcessState(t, childPID, false, 5*time.Second)
 }
 
+func TestRunContext_TailFileMirrorsToStdout(t *testing.T) {
+	exe := buildTestApp(t, "file-log")
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "app.log")
+	pidFile := filepath.Join(tempDir, "file-log.pid")
+
+	var out, errb bytes.Buffer
+	err := RunContext(context.Background(), Config{
+		Command:     []string{exe, "--log-file", logFile, "--pid-file", pidFile, "--lines", "4", "--interval-ms", "100"},
+		TailFiles:   []string{logFile},
+		StopTimeout: 2 * time.Second,
+		KillTree:    true,
+		Verbose:     true,
+	}, &out, &errb)
+	if err != nil {
+		t.Fatalf("expected file-log success, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+	}
+	if !strings.Contains(out.String(), "file-log line") || !strings.Contains(out.String(), "file-log line 4") {
+		t.Fatalf("expected stdout to contain tailed file-log output, got:\n%s", out.String())
+	}
+}
+
 func TestRunContext_PortRebindServerRestartsCleanly(t *testing.T) {
 	exe := buildTestApp(t, "port-rebind-server")
 	tempDir := t.TempDir()

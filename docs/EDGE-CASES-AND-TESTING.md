@@ -244,6 +244,7 @@ This is the concrete example-by-example inventory of what is currently exercised
 | `port-rebind-server` | Service restart / port reuse behavior | Port is reusable after shutdown and restart test passes |
 | `stdio-hold-open` | Child inherits stdout/stderr and keeps handles active | Cleanup still succeeds in the current proof |
 | `console-trap` | Console control-event aware process | Ctrl-break delivery is observed and exits cleanly |
+| `file-log` | App writes logs to a file instead of stdout/stderr | `--tail-file` mirrors file-backed logs into stdout during the run |
 
 ### Go sample example
 

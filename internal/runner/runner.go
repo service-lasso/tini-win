@@ -49,6 +49,12 @@ func RunContext(ctx context.Context, cfg Config, stdout, stderr io.Writer) error
 	}
 	defer closeJobObject(job)
 
+	var tails *tailManager
+	if len(cfg.TailFiles) > 0 {
+		tails = startTailers(ctx, cfg.TailFiles, stdout, cfg.Verbose)
+		defer tails.StopAndFlush()
+	}
+
 	waitCh := make(chan waitResult, 1)
 	go func() {
 		err := child.Wait()
