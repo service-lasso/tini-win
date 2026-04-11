@@ -338,6 +338,28 @@ func TestRunContext_BreakawayChildEscapesWhenAllowed(t *testing.T) {
 	waitForProcessState(t, childPID, false, 5*time.Second)
 }
 
+func TestRunContext_StdoutStderrPassthrough(t *testing.T) {
+	exe := buildTestApp(t, "stdout-stderr")
+	tempDir := t.TempDir()
+	pidFile := filepath.Join(tempDir, "stdout-stderr.pid")
+
+	var out, errb bytes.Buffer
+	err := RunContext(context.Background(), Config{
+		Command:     []string{exe, "--pid-file", pidFile, "--stdout", "alpha-out", "--stderr", "beta-err"},
+		StopTimeout: 2 * time.Second,
+		KillTree:    true,
+	}, &out, &errb)
+	if err != nil {
+		t.Fatalf("expected stdout-stderr success, got %v\nstdout:\n%s\nstderr:\n%s", err, out.String(), errb.String())
+	}
+	if !strings.Contains(out.String(), "alpha-out") {
+		t.Fatalf("expected stdout passthrough, got:\n%s", out.String())
+	}
+	if !strings.Contains(errb.String(), "beta-err") {
+		t.Fatalf("expected stderr passthrough, got:\n%s", errb.String())
+	}
+}
+
 func TestRunContext_TailFileMirrorsToStdout(t *testing.T) {
 	exe := buildTestApp(t, "file-log")
 	tempDir := t.TempDir()

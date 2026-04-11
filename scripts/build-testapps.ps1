@@ -14,7 +14,8 @@ $targets = @(
   @{ Path = '.\testapps\port-rebind-server'; Out = '.\bin\testapps\port-rebind-server.exe' },
   @{ Path = '.\testapps\stdio-hold-open'; Out = '.\bin\testapps\stdio-hold-open.exe' },
   @{ Path = '.\testapps\console-trap'; Out = '.\bin\testapps\console-trap.exe' },
-  @{ Path = '.\testapps\file-log'; Out = '.\bin\testapps\file-log.exe' }
+  @{ Path = '.\testapps\file-log'; Out = '.\bin\testapps\file-log.exe' },
+  @{ Path = '.\testapps\stdout-stderr'; Out = '.\bin\testapps\stdout-stderr.exe' }
 )
 
 foreach ($t in $targets) {
