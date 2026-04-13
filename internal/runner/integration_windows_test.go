@@ -20,7 +20,7 @@ import (
 
 func TestRunContext_SimpleExitWritesPIDFile(t *testing.T) {
 	exe := buildTestApp(t, "simple-exit")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	pidFile := filepath.Join(tempDir, "simple-exit.pid")
 
 	var out, errb bytes.Buffer
@@ -42,7 +42,7 @@ func TestRunContext_SimpleExitWritesPIDFile(t *testing.T) {
 
 func TestRunContext_GracefulStopCommand(t *testing.T) {
 	exe := buildTestApp(t, "graceful-stop")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	signalFile := filepath.Join(tempDir, "stop.signal")
 	pidFile := filepath.Join(tempDir, "graceful-stop.pid")
 
@@ -82,7 +82,7 @@ func TestRunContext_GracefulStopCommand(t *testing.T) {
 
 func TestRunContext_KillTreeTerminatesSpawnedChild(t *testing.T) {
 	exe := buildTestApp(t, "spawn-child")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	parentPIDFile := filepath.Join(tempDir, "spawn-parent.pid")
 	childPIDFile := filepath.Join(tempDir, "spawn-child.pid")
 
@@ -122,7 +122,7 @@ func TestRunContext_KillTreeTerminatesSpawnedChild(t *testing.T) {
 
 func TestRunContext_ForcedStopReturnsExitCodeErrorWithoutRemap(t *testing.T) {
 	exe := buildTestApp(t, "ignore-stop")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	pidFile := filepath.Join(tempDir, "ignore-stop.pid")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -162,7 +162,7 @@ func TestRunContext_ForcedStopReturnsExitCodeErrorWithoutRemap(t *testing.T) {
 
 func TestRunContext_RelaunchOrphanChildGetsCleanedUp(t *testing.T) {
 	exe := buildTestApp(t, "relaunch-orphan")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	parentPIDFile := filepath.Join(tempDir, "relaunch-parent.pid")
 	childPIDFile := filepath.Join(tempDir, "relaunch-child.pid")
 
@@ -185,7 +185,7 @@ func TestRunContext_RelaunchOrphanChildGetsCleanedUp(t *testing.T) {
 func TestRunContext_BrokeredChildCanEscapeTree(t *testing.T) {
 	brokerExe := buildTestApp(t, "brokered-child")
 	clientExe := brokerExe
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	requestFile := filepath.Join(tempDir, "broker.request")
 	stopFile := filepath.Join(tempDir, "broker.stop")
 	brokerPIDFile := filepath.Join(tempDir, "broker.pid")
@@ -247,7 +247,7 @@ func TestRunContext_BrokeredChildCanEscapeTree(t *testing.T) {
 
 func TestRunContext_BreakawayChildCharacterization(t *testing.T) {
 	exe := buildTestApp(t, "breakaway-child")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	parentPIDFile := filepath.Join(tempDir, "breakaway-parent.pid")
 	childPIDFile := filepath.Join(tempDir, "breakaway-child.pid")
 	statusFile := filepath.Join(tempDir, "breakaway.status")
@@ -289,7 +289,7 @@ func TestRunContext_BreakawayChildCharacterization(t *testing.T) {
 
 func TestRunContext_BreakawayChildEscapesWhenAllowed(t *testing.T) {
 	exe := buildTestApp(t, "breakaway-child")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	parentPIDFile := filepath.Join(tempDir, "breakaway-allowed-parent.pid")
 	childPIDFile := filepath.Join(tempDir, "breakaway-allowed-child.pid")
 	statusFile := filepath.Join(tempDir, "breakaway-allowed.status")
@@ -340,7 +340,7 @@ func TestRunContext_BreakawayChildEscapesWhenAllowed(t *testing.T) {
 
 func TestRunContext_StdoutStderrPassthrough(t *testing.T) {
 	exe := buildTestApp(t, "stdout-stderr")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	pidFile := filepath.Join(tempDir, "stdout-stderr.pid")
 
 	var out, errb bytes.Buffer
@@ -362,7 +362,7 @@ func TestRunContext_StdoutStderrPassthrough(t *testing.T) {
 
 func TestRunContext_TailFileMirrorsToStdout(t *testing.T) {
 	exe := buildTestApp(t, "file-log")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	logFile := filepath.Join(tempDir, "app.log")
 	pidFile := filepath.Join(tempDir, "file-log.pid")
 
@@ -384,7 +384,7 @@ func TestRunContext_TailFileMirrorsToStdout(t *testing.T) {
 
 func TestRunContext_PortRebindServerRestartsCleanly(t *testing.T) {
 	exe := buildTestApp(t, "port-rebind-server")
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	signalFile := filepath.Join(tempDir, "server.signal")
 	pidFile := filepath.Join(tempDir, "server.pid")
 	port := 18190
@@ -439,7 +439,7 @@ func TestRunContext_PortRebindServerRestartsCleanly(t *testing.T) {
 func buildTestApp(t *testing.T, name string) string {
 	t.Helper()
 	root := findRepoRoot(t)
-	out := filepath.Join(t.TempDir(), name+".exe")
+	out := filepath.Join(repoTempDir(t), name+".exe")
 	src := filepath.Join(root, "testapps", name)
 	cmd := exec.Command("go", "build", "-o", out, src)
 	cmd.Dir = root
@@ -449,6 +449,28 @@ func buildTestApp(t *testing.T, name string) string {
 		t.Fatalf("build test app %s: %v\n%s", name, err, stderr.String())
 	}
 	return out
+}
+
+func repoTempDir(t *testing.T) string {
+	t.Helper()
+	root := findRepoRoot(t)
+	base := filepath.Join(root, "tmp", "tests")
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		t.Fatalf("mkdir repo temp base: %v", err)
+	}
+	dir, err := os.MkdirTemp(base, sanitizeTestName(t.Name())+"-")
+	if err != nil {
+		t.Fatalf("create repo temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(dir)
+	})
+	return dir
+}
+
+func sanitizeTestName(name string) string {
+	replacer := strings.NewReplacer("/", "-", "\\", "-", ":", "-", " ", "-")
+	return replacer.Replace(strings.ToLower(name))
 }
 
 func findRepoRoot(t *testing.T) string {
