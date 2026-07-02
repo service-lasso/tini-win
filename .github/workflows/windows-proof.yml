@@ -1,0 +1,68 @@
+name: windows proof
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-proof:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      GO_VERSION: '1.24.2'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Prepare proof artifact folders
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force .\artifacts\proof | Out-Null
+          New-Item -ItemType Directory -Force .\artifacts\proof\nginx-contract | Out-Null
+
+      - name: Run full test and MVP proof flow
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            .\scripts\test.ps1 *>&1 | Tee-Object -FilePath .\artifacts\proof\test-and-mvp-proof.log
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath .\artifacts\proof\test-and-mvp-proof.failure.log
+            throw
+          }
+
+      - name: Run dedicated nginx.exe contract proof through tini-win
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            .\scripts\prove-nginx-contract.ps1 -StartPort 18280 -Iterations 5 -OutputDir .\artifacts\proof\nginx-contract *>&1 | Tee-Object -FilePath .\artifacts\proof\nginx-contract.log
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath .\artifacts\proof\nginx-contract.failure.log
+            throw
+          }
+
+      - name: Upload proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tini-win-windows-proof-${{ github.run_id }}
+          path: artifacts\proof\**
+          if-no-files-found: warn
+          retention-days: 14
